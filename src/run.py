@@ -237,7 +237,7 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor,
+        postprocessor=postprocessor(y_scaler=yscaler),
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
     )
