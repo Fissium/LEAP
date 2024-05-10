@@ -1,0 +1,39 @@
+[project]
+name = "LEAP"
+version = "0.1.0"
+description = "My solution for LEAP Kaggle competition"
+authors = [{ name = "Nikita Rubinkovskiy", email = "narubinkovskiy@gmail.com" }]
+dependencies = [
+    "torch>=2.3.0",
+    "polars>=0.20.23",
+    "numpy>=1.26.4",
+    "rootutils>=1.0.7",
+    "pyarrow>=16.0.0",
+    "scikit-learn>=1.4.2",
+    "pkbar>=0.5",
+    "tqdm>=4.66.4",
+    "pandas>=2.2.2",
+    "hydra-core>=1.3.2",
+]
+requires-python = "==3.11.*"
+readme = "README.md"
+license = { text = "MIT" }
+
+
+[tool.pdm]
+distribution = false
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "ipywidgets>=8.1.2",
+    "ipykernel>=6.29.4",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+
+[tool.ruff.lint]
+select = ["ARG", "F", "E", "I", "W", "B", "C4", "UP", "RUF"]
+fixable = ["I"]
