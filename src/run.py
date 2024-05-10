@@ -135,13 +135,17 @@ def postprocessing(
 
 
 def prepare_submission(
-    data_dir: Path, ss_filename: str, submissions_filename: str, y_pred: np.ndarray
+    data_dir: Path,
+    log_dir: Path,
+    ss_filename: str,
+    submissions_filename: str,
+    y_pred: np.ndarray,
 ) -> None:
     samples_submission = pd.read_csv(data_dir.joinpath(ss_filename))
     samples_submission.iloc[:, 1:] = y_pred
-    samples_submission.to_parquet(data_dir.joinpath(submissions_filename), index=False)
+    samples_submission.to_parquet(log_dir.joinpath(submissions_filename), index=False)
 
-    logger.info(f"Submission file saved to {data_dir.joinpath(submissions_filename)}")
+    logger.info(f"Submission file saved to {log_dir.joinpath(submissions_filename)}")
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run.yaml")
@@ -263,10 +267,11 @@ def main(cfg: DictConfig):
 
     logger.info("Preparing submission...")
 
-    submissions_filename = "submission_" + Path(cfg.hydra_dir).name + ".parquet"
+    submissions_filename = "submission.parquet"
 
     prepare_submission(
         data_dir=Path(cfg.dataset_root),
+        log_dir=Path(cfg.hydra_dir),
         ss_filename=cfg.ss_filename,
         submissions_filename=submissions_filename,
         y_pred=preds,
