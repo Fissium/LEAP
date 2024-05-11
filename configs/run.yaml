@@ -37,7 +37,7 @@ scheduler:
 model:
   _target_: src.models.WaveNetLSTM
   output_size: 368
-  inch: 9
+  inch: 60
   kernel_size: 3
 
 trainer:

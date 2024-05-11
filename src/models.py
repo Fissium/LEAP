@@ -65,7 +65,7 @@ class WaveNet(nn.Module):
         x = self.wave_block4(x)
         x = x.reshape(x.shape[0], -1)
         x = torch.cat((x, x_scalar), dim=1)
-        x = nn.functional.silu(self.fc_in(x))
+        x = nn.functional.relu(self.fc_in(x))
         x = self.fc_out(x)
         return x
 
@@ -78,9 +78,9 @@ class WaveNetLSTM(nn.Module):
         self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
         self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
         self.lstm = nn.LSTM(
-            128 + 9, 64, num_layers=2, batch_first=True, bidirectional=True
+            128 + 60, 128, num_layers=2, batch_first=True, bidirectional=True
         )
-        self.fc_in = nn.Linear(60 * 128 + 16, 1024)
+        self.fc_in = nn.Linear(18 * 128 + 16, 1024)
         self.fc_out = nn.Linear(1024, output_size)
         self._reinitialize()
 
@@ -108,16 +108,16 @@ class WaveNetLSTM(nn.Module):
                     p.data.fill_(0)
 
     def forward(self, x):
-        x_seq = torch.cat((x[:, :360], x[:, -180:]), dim=1).view(x.shape[0], 9, 60)
+        x_seq = torch.cat((x[:, :360], x[:, -180:]), dim=1).view(x.shape[0], 60, 9)
         x_scalar = x[:, 360:376]
 
         x = self.wave_block1(x_seq)
         x = self.wave_block2(x)
         x = self.wave_block3(x)
         x = self.wave_block4(x)
-        x, _ = self.lstm(torch.cat((x.permute(0, 2, 1), x_seq.permute(0, 2, 1)), dim=2))
+        x, _ = self.lstm(torch.cat((x, x_seq), dim=1).permute(0, 2, 1))
         x = x.reshape(x.shape[0], -1)
         x = torch.cat((x, x_scalar), dim=1)
-        x = nn.functional.silu(self.fc_in(x))
+        x = nn.functional.relu(self.fc_in(x))
         x = self.fc_out(x)
         return x
