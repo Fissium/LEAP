@@ -58,5 +58,20 @@ class NumpyDataset(Dataset):
         """
         Generate one sample of data.
         """
+
+        x = self.x[index].reshape(1, -1)
         # Convert the data to tensors when requested
-        return torch.from_numpy(self.x[index]), torch.from_numpy(self.y[index])
+        x_seq = np.concatenate(
+            (
+                x[:, :360].reshape(6, 60),
+                x[:, -180:].reshape(3, 60),
+            ),
+            axis=0,
+        )
+        x_scalar = x[:, 360:376].reshape(-1)
+        # make x_scalar shape of (60, 16) filled with the same value
+        x_scalar = np.repeat(x_scalar, 60, axis=0).reshape(16, 60)
+
+        x = np.concatenate((x_seq, x_scalar), axis=0)
+
+        return torch.from_numpy(x), torch.from_numpy(self.y[index])

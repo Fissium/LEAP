@@ -35,13 +35,13 @@ scheduler:
   patience: 5
 
 model:
-  _target_: src.models.WaveNetLSTM
+  _target_: src.models.WaveNetLSTMAttention
   output_size: 368
-  inch: 60
+  inch: 25
   kernel_size: 3
 
 trainer:
-  epochs: 10
+  epochs: 100
   checkpoint_dir: ${hydra_dir}
 
 hydra:
