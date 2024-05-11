@@ -19,7 +19,6 @@ from src.data import NumpyDataset, read_data  # noqa: E402
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
     XScaler,
-    YScaler,
     get_device,
     get_features_targets,
     postprocessor,
@@ -36,7 +35,6 @@ logger = logging.getLogger(__name__)
 def eval(
     model: nn.Module,
     val_loader: DataLoader,
-    y_scaler: YScaler,
     device: torch.device,
     log_dir: Path,
 ) -> np.ndarray:
@@ -53,10 +51,6 @@ def eval(
             targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
-
-    # scale back
-    preds = y_scaler.inverse_transform(preds)
-    targets = y_scaler.inverse_transform(targets)
 
     r2_scores = r2_score(targets, preds)
     logger.info(f"R2 Score before postprocessing: {r2_scores}")
@@ -81,7 +75,6 @@ def predict(
     device: torch.device,
     features: list[str],
     xscaler: XScaler,
-    yscaler: YScaler,
     batch_size: int,
 ) -> np.ndarray:
     state_dict = torch.load(log_dir.joinpath("best.ckpt"))["model_state_dict"]
@@ -107,7 +100,6 @@ def predict(
         for inputs, _ in tqdm(test_loader):
             preds.append(model(inputs.to(device)).detach().cpu().numpy())
     preds = np.concatenate(preds)
-    preds = yscaler.inverse_transform(preds)
 
     return preds
 
@@ -192,14 +184,8 @@ def main(cfg: DictConfig):
     xscaler = XScaler()
     xscaler.fit(X_train)
 
-    yscaler = YScaler()
-    yscaler.fit(y_train)
-
     X_train = xscaler.transform(X_train)
     X_val = xscaler.transform(X_val)
-
-    y_train = yscaler.transform(y_train)
-    y_val = yscaler.transform(y_val)
 
     train_dataset = NumpyDataset(X_train, y_train)
     val_dataset = NumpyDataset(X_val, y_val)
@@ -237,7 +223,7 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor(y_scaler=yscaler),
+        postprocessor=postprocessor,
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
     )
@@ -251,7 +237,6 @@ def main(cfg: DictConfig):
     raw_r2_scores = eval(
         model=model,
         val_loader=val_loader,
-        y_scaler=yscaler,
         device=device,
         log_dir=Path(cfg.hydra_dir),
     )
@@ -268,7 +253,6 @@ def main(cfg: DictConfig):
         device=device,
         features=features,
         xscaler=xscaler,
-        yscaler=yscaler,
         batch_size=cfg.dataset.batch_size,
     )
 

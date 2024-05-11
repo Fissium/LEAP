@@ -65,7 +65,7 @@ class WaveNet(nn.Module):
         x = self.wave_block4(x)
         x = x.reshape(x.shape[0], -1)
         x = torch.cat((x, x_scalar), dim=1)
-        x = nn.functional.relu(self.fc_in(x))
+        x = nn.functional.silu(self.fc_in(x))
         x = self.fc_out(x)
         return x
 
@@ -118,6 +118,6 @@ class WaveNetLSTM(nn.Module):
         x, _ = self.lstm(torch.cat((x.permute(0, 2, 1), x_seq.permute(0, 2, 1)), dim=2))
         x = x.reshape(x.shape[0], -1)
         x = torch.cat((x, x_scalar), dim=1)
-        x = nn.functional.relu(self.fc_in(x))
+        x = nn.functional.silu(self.fc_in(x))
         x = self.fc_out(x)
         return x
