@@ -25,9 +25,6 @@ from src.utils import (  # noqa: E402
     seed_everything,
 )
 
-torch.set_float32_matmul_precision("high")
-torch.set_num_threads(1)
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

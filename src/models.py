@@ -52,8 +52,8 @@ class WaveNet(nn.Module):
         self.wave_block2 = WaveBlock(16, 32, 8, kernel_size)
         self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
         self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
-        self.wave_block5 = WaveBlock(128, 6, 4, kernel_size)
-        self.fc_in = nn.Linear(360 + 16, 256)
+        self.wave_block5 = WaveBlock(128, 6, 1, kernel_size)
+        self.fc_in = nn.Linear(360 + 16 + 180, 256)
         self.fc_out = nn.Linear(256, 8)
 
     def forward(self, x_seq, x_scalar):
@@ -63,6 +63,6 @@ class WaveNet(nn.Module):
         x = self.wave_block4(x)
         x = self.wave_block5(x)
         x = x.reshape(x.shape[0], -1)
-        y = nn.functional.silu(self.fc_in(torch.cat((x, x_scalar), dim=1)))
+        y = nn.functional.gelu(self.fc_in(torch.cat((x, x_scalar), dim=1)))
         y = self.fc_out(y)
         return torch.cat((x, y), dim=1)

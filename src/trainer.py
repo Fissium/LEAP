@@ -315,7 +315,7 @@ class Trainer:
             if model.training:
                 loss.backward()
                 # Clip the gradients
-                nn.utils.clip_grad_norm_(model.parameters(), 5.0, norm_type=2.0)
+                # nn.utils.clip_grad_norm_(model.parameters(), 5.0, norm_type=2.0)
                 # Update the parameters
                 optimizer.step()
                 optimizer.zero_grad()
