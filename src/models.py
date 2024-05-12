@@ -46,100 +46,23 @@ class WaveBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, output_size, inch=9, kernel_size=3):
+    def __init__(self, inch=9, kernel_size=3):
         super().__init__()
         self.wave_block1 = WaveBlock(inch, 16, 12, kernel_size)
         self.wave_block2 = WaveBlock(16, 32, 8, kernel_size)
         self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
         self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
-        self.fc_out = nn.Linear(1024, output_size)
-        self.fc_in = nn.Linear(60 * 128, 1024)
+        self.wave_block5 = WaveBlock(128, 6, 4, kernel_size)
+        self.fc_in = nn.Linear(360 + 16, 256)
+        self.fc_out = nn.Linear(256, 8)
 
-    def forward(self, x):
-        x = self.wave_block1(x)
+    def forward(self, x_seq, x_scalar):
+        x = self.wave_block1(x_seq)
         x = self.wave_block2(x)
         x = self.wave_block3(x)
         x = self.wave_block4(x)
+        x = self.wave_block5(x)
         x = x.reshape(x.shape[0], -1)
-        x = nn.functional.relu(self.fc_in(x))
-        x = self.fc_out(x)
-        return x
-
-
-class WaveNetLSTM(nn.Module):
-    def __init__(self, output_size, inch=9, kernel_size=3):
-        super().__init__()
-        self.wave_block1 = WaveBlock(inch, 16, 12, kernel_size)
-        self.wave_block2 = WaveBlock(16, 32, 8, kernel_size)
-        self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
-        self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
-        self.lstm = nn.LSTM(
-            128 + 25,
-            64,
-            num_layers=2,
-            batch_first=True,
-            bidirectional=True,
-        )
-        self.fc_in = nn.Linear(60 * 128, 1024)
-        self.fc_out = nn.Linear(1024, output_size)
-
-    def forward(self, x):
-        x_inp = x
-        x = self.wave_block1(x)
-        x = self.wave_block2(x)
-        x = self.wave_block3(x)
-        x = self.wave_block4(x)
-        x, _ = self.lstm(torch.cat((x.permute(0, 2, 1), x_inp.permute(0, 2, 1)), dim=2))
-        x = x.reshape(x.shape[0], -1)
-        x = nn.functional.relu(self.fc_in(x))
-        x = self.fc_out(x)
-        return x
-
-
-class WaveNetLSTMAttention(nn.Module):
-    def __init__(self, output_size, inch=9, kernel_size=3):
-        super().__init__()
-        self.wave_block1 = WaveBlock(inch, 16, 12, kernel_size)
-        self.wave_block2 = WaveBlock(16, 32, 8, kernel_size)
-        self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
-        self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
-        self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=60,
-                nhead=6,
-                dim_feedforward=512,
-                dropout=0.1,
-                batch_first=True,
-            ),
-            num_layers=2,
-        )
-        self.lstm = nn.LSTM(
-            128 + 25,
-            64,
-            num_layers=2,
-            batch_first=True,
-            bidirectional=True,
-        )
-        self.fc_in = nn.Linear(60 * 128, 1024)
-        self.fc_out = nn.Linear(1024, output_size)
-
-    def forward(self, x):
-        x_wavent = self.wave_block1(x)
-        x_wavent = self.wave_block2(x_wavent)
-        x_wavent = self.wave_block3(x_wavent)
-        x_wavent = self.wave_block4(x_wavent)
-
-        x_transformer = self.transformer(x)
-        y, _ = self.lstm(
-            torch.cat(
-                (
-                    x_wavent.permute(0, 2, 1),
-                    x_transformer.permute(0, 2, 1),
-                ),
-                dim=2,
-            )
-        )
-        y = y.reshape(y.shape[0], -1)
-        y = nn.functional.relu(self.fc_in(y))
+        y = nn.functional.silu(self.fc_in(torch.cat((x, x_scalar), dim=1)))
         y = self.fc_out(y)
-        return y
+        return torch.cat((x, y), dim=1)

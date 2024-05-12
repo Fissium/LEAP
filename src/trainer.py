@@ -281,7 +281,7 @@ class Trainer:
 
         num_samples: int = len(data_loader.dataset)  # type: ignore
 
-        output_size: int = data_loader.dataset[:1][1].shape[1]
+        output_size: int = 368
 
         running_loss = []
         y_true = np.zeros(
@@ -302,12 +302,13 @@ class Trainer:
         )
         metrics = {}
         start = time.time()
-        for i, (inputs, labels) in enumerate(data_loader):
+        for i, (inputs_seq, inputs_scalar, labels) in enumerate(data_loader):
             # Move the batch to the device we are using.
-            inputs = inputs.to(device)
+            inputs_seq = inputs_seq.to(device)
+            inputs_scalar = inputs_scalar.to(device)
             labels = labels.to(device)
 
-            y_hat = model(inputs)  # this just computed f_Θ(x(i))
+            y_hat = model(inputs_seq, inputs_scalar)  # this just computed f_Θ(x(i))
             # Compute loss.
             loss = loss_func(y_hat, labels)
 

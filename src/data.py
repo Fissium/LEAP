@@ -54,7 +54,7 @@ class NumpyDataset(Dataset):
         """
         return self.x.shape[0]
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> tuple[torch.Tensor, ...]:
         """
         Generate one sample of data.
         """
@@ -69,9 +69,9 @@ class NumpyDataset(Dataset):
             axis=0,
         )
         x_scalar = x[:, 360:376].reshape(-1)
-        # make x_scalar shape of (60, 16) filled with the same value
-        x_scalar = np.repeat(x_scalar, 60, axis=0).reshape(16, 60)
 
-        x = np.concatenate((x_seq, x_scalar), axis=0)
-
-        return torch.from_numpy(x), torch.from_numpy(self.y[index])
+        return (
+            torch.from_numpy(x_seq),
+            torch.from_numpy(x_scalar),
+            torch.from_numpy(self.y[index]),
+        )

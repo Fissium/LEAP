@@ -35,9 +35,8 @@ scheduler:
   patience: 5
 
 model:
-  _target_: src.models.WaveNetLSTMAttention
-  output_size: 368
-  inch: 25
+  _target_: src.models.WaveNet
+  inch: 9
   kernel_size: 3
 
 trainer:
