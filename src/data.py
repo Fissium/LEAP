@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import torch
 from torch.utils.data import Dataset
 
@@ -15,9 +16,13 @@ def read_data(
     features: list[str],
     targets: list[str],
 ) -> tuple[np.ndarray, ...]:
-    df = pd.read_csv(
-        data_dir.joinpath(train_filename), nrows=n_rows, usecols=range(1, 925)
-    ).astype("float32")
+    df = (
+        pl.read_csv(
+            data_dir.joinpath(train_filename), n_rows=n_rows, columns=range(1, 925)
+        )
+        .to_pandas()
+        .astype("float32")
+    )
 
     weights = pd.read_csv(
         data_dir.joinpath(ss_filename), nrows=1, usecols=range(1, 369)

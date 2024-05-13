@@ -4,6 +4,7 @@ from pathlib import Path
 import hydra
 import numpy as np
 import pandas as pd
+import polars as pl
 import rootutils
 import torch
 import torch.nn as nn
@@ -84,7 +85,8 @@ def predict(
     model.load_state_dict(state_dict)
     model.eval()
     X = (
-        pd.read_csv(data_dir.joinpath(test_filename))[features]
+        pl.read_csv(data_dir.joinpath(test_filename))
+        .to_pandas()[features]
         .astype("float32")
         .to_numpy()
     )
