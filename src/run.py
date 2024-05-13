@@ -214,7 +214,7 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
-    criterion = nn.MSELoss()
+    criterion = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
