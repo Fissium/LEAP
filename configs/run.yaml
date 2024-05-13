@@ -37,7 +37,7 @@ scheduler:
 model:
   _target_: src.models.WaveNet
   inch: 6
-  kernel_size: 5
+  kernel_size: 3
 
 trainer:
   epochs: 300

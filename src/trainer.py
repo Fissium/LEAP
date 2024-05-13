@@ -17,6 +17,8 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.utils import EarlyStopping  # noqa: E402
 
+torch.set_num_threads(10)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
 MoveToType = Any

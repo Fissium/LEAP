@@ -28,6 +28,7 @@ from src.utils import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+torch.set_num_threads(10)
 
 
 def eval(
