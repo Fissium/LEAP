@@ -1,5 +1,6 @@
 import logging
 import random
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -11,18 +12,39 @@ from sklearn.metrics import r2_score
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
 
+TRICK_INDXS = [
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+]
+
 
 def postprocessor(
-    y_pred: np.ndarray,
-    y_true: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    scores = r2_score(y_true, y_pred, multioutput="raw_values")
+    X_train: np.ndarray,
+    X_val: np.ndarray,
+    indxs: list[int] = TRICK_INDXS,
+) -> Callable:
+    def inner(
+        y_pred: np.ndarray, y_true: np.ndarray, training: bool
+    ) -> tuple[np.ndarray, np.ndarray]:
+        if training:
+            y_pred[:, indxs] = -X_train / 1200
+        else:
+            y_pred[:, indxs] = -X_val / 1200
+        scores = r2_score(y_true, y_pred, multioutput="raw_values")
 
-    for idx, score in enumerate(scores):  # type: ignore
-        if score <= 0:
-            y_pred[:, idx] = 0
+        for idx, score in enumerate(scores):  # type: ignore
+            if score <= 0:
+                y_pred[:, idx] = 0
 
-    return y_pred, y_true
+        return y_pred, y_true
+
+    return inner
 
 
 def seed_everything(seed: int) -> None:

@@ -19,6 +19,7 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.data import NumpyDataset, read_data  # noqa: E402
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
+    TRICK_INDXS,
     XScaler,
     get_device,
     get_features_targets,
@@ -35,6 +36,7 @@ def eval(
     model: nn.Module,
     val_loader: DataLoader,
     device: torch.device,
+    X_val_trick: np.ndarray,
     log_dir: Path,
 ) -> np.ndarray:
     state_dict = torch.load(log_dir.joinpath("best.ckpt"))["model_state_dict"]
@@ -59,6 +61,8 @@ def eval(
     r2_scores = r2_score(targets, preds)
     logger.info(f"R2 Score before postprocessing: {r2_scores}")
 
+    preds[:, TRICK_INDXS] = -X_val_trick / 1200  # type: ignore
+
     raw_r2_scores = r2_score(targets, preds, multioutput="raw_values")
 
     for idx, score in enumerate(raw_r2_scores):  # type: ignore
@@ -80,6 +84,7 @@ def predict(
     features: list[str],
     xscaler: XScaler,
     batch_size: int,
+    weights: np.ndarray,
 ) -> np.ndarray:
     state_dict = torch.load(log_dir.joinpath("best.ckpt"))["model_state_dict"]
     model.to(device)
@@ -91,6 +96,8 @@ def predict(
         .astype("float32")
         .to_numpy()
     )
+
+    X_trick: np.ndarray = X[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
 
     X = xscaler.transform(X)
 
@@ -110,6 +117,7 @@ def predict(
                 .numpy()
             )
     preds = np.concatenate(preds)
+    preds[:, TRICK_INDXS] = -X_trick / 1200  # type: ignore
 
     return preds
 
@@ -173,7 +181,7 @@ def main(cfg: DictConfig):
 
     logger.info("Loading data...")
 
-    X_train, y_train, X_val, y_val = read_data(
+    X_train, y_train, X_val, y_val, weights = read_data(
         data_dir=Path(cfg.dataset_root),
         train_filename=cfg.train_filename,
         ss_filename=cfg.ss_filename,
@@ -190,6 +198,9 @@ def main(cfg: DictConfig):
 
     logger.info(f"X_val shape: {X_val.shape}")
     logger.info(f"y_val shape: {y_val.shape}")
+
+    X_train_trick = X_train[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
+    X_val_trick = X_val[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
 
     xscaler = XScaler()
     xscaler.fit(X_train)
@@ -215,7 +226,7 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
-    criterion = nn.L1Loss()
+    criterion = nn.MSELoss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
@@ -233,7 +244,7 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor,
+        postprocessor=postprocessor(X_train_trick, X_val_trick),
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
     )
@@ -249,6 +260,7 @@ def main(cfg: DictConfig):
         val_loader=val_loader,
         device=device,
         log_dir=Path(cfg.hydra_dir),
+        X_val_trick=X_val_trick,
     )
 
     logger.info("Model evaluated.")
@@ -264,6 +276,7 @@ def main(cfg: DictConfig):
         features=features,
         xscaler=xscaler,
         batch_size=cfg.dataset.batch_size,
+        weights=weights,
     )
 
     preds = postprocessing(

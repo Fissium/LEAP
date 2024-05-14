@@ -4,6 +4,8 @@ data/*
 logs/*
 !logs/.gitkeep
 runs/
+notebooks/*
+!notebooks/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -28,10 +28,8 @@ def read_data(
         data_dir.joinpath(ss_filename), nrows=1, usecols=range(1, 369)
     ).astype("float32")
 
-    weights = weights.to_numpy().reshape(1, -1)
-
     X = df[features].to_numpy()
-    y = df[targets].to_numpy() * weights
+    y = df[targets].to_numpy() * weights.to_numpy().reshape(1, -1)
 
     train_size = int(len(X) * train_val_split[0])
 
@@ -39,7 +37,7 @@ def read_data(
 
     X_val, y_val = X[train_size:, :], y[train_size:, :]
 
-    return X_train, y_train, X_val, y_val
+    return X_train, y_train, X_val, y_val, weights.to_numpy()
 
 
 class NumpyDataset(Dataset):

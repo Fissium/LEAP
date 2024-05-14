@@ -341,7 +341,7 @@ class Trainer:
                 y_true[i * batch_size : i * batch_size + adj_batch_size] = labels
 
         if self.postprocessor is not None:
-            y_pred, y_true = self.postprocessor(y_pred, y_true)
+            y_pred, y_true = self.postprocessor(y_pred, y_true, model.training)
 
         # end training epoch
         end = time.time()
