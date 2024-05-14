@@ -42,7 +42,7 @@ class Trainer:
         early_stopping: EarlyStopping | None = None,
         lr_scheduler: ReduceLROnPlateau | _LRScheduler | None = None,
         postprocessor: Callable | None = None,
-        device: torch.device | None = None,
+        device: str | None = None,
     ) -> None:
         """
         Parameters
@@ -85,7 +85,7 @@ class Trainer:
         self.score_funcs = score_funcs
         self.epochs = epochs
         if device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
         self.checkpoint_dir = checkpoint_dir
@@ -242,7 +242,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         data_loader: torch.utils.data.DataLoader,
         loss_func: _Loss,
-        device: torch.device,
+        device: str,
         results: dict[str, list],
         score_funcs: dict[str, Callable] | None,
         pbar: pkbar.Kbar | None,

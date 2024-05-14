@@ -54,8 +54,8 @@ def seed_everything(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def get_device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def get_device() -> str:
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def get_features_targets(

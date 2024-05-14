@@ -35,7 +35,7 @@ torch.set_num_threads(10)
 def eval(
     model: nn.Module,
     val_loader: DataLoader,
-    device: torch.device,
+    device: str,
     X_val_trick: np.ndarray,
     log_dir: Path,
 ) -> np.ndarray:
@@ -80,7 +80,7 @@ def predict(
     log_dir: Path,
     test_filename: str,
     model: nn.Module,
-    device: torch.device,
+    device: str,
     features: list[str],
     xscaler: XScaler,
     batch_size: int,
