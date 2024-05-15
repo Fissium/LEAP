@@ -47,8 +47,9 @@ def eval(
     preds = []
     targets = []
     with torch.no_grad():
-        for inputs, labels in tqdm(val_loader):
-            preds.append(model(inputs.to(device)).detach().cpu().numpy())
+        for inputs, labels, _ in tqdm(val_loader):
+            y_hat, _ = model(inputs.to(device))
+            preds.append(y_hat.detach().cpu().numpy())
             targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
@@ -96,7 +97,7 @@ def predict(
 
     X = xscaler.transform(X)
 
-    test_dataset = NumpyDataset(X, np.zeros((X.shape[0], 1)))
+    test_dataset = NumpyDataset(X, np.zeros((X.shape[0], 368)))
 
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False, drop_last=False
@@ -104,8 +105,9 @@ def predict(
 
     preds = []
     with torch.no_grad():
-        for inputs, _ in tqdm(test_loader):
-            preds.append(model(inputs.to(device)).detach().cpu().numpy())
+        for inputs, *_ in tqdm(test_loader):
+            y_hat, _ = model(inputs.to(device))
+            preds.append(y_hat.detach().cpu().numpy())
     preds = np.concatenate(preds)
     preds[:, TRICK_INDXS] = -X_trick / 1200  # type: ignore
 
@@ -217,6 +219,7 @@ def main(cfg: DictConfig):
 
     model = hydra.utils.instantiate(cfg.model)
     criterion = nn.MSELoss()
+    criterion_diff = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
@@ -225,6 +228,7 @@ def main(cfg: DictConfig):
     trainer = Trainer(
         model=model,
         loss_func=criterion,
+        loss_func_diff=criterion_diff,
         optimizer=optimizer,
         train_loader=train_loader,
         val_loader=val_loader,

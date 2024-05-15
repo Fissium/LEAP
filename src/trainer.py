@@ -31,6 +31,7 @@ class Trainer:
         self,
         model: nn.Module,
         loss_func: _Loss,
+        loss_func_diff: _Loss,
         checkpoint_dir: Path,
         optimizer: torch.optim.Optimizer,
         train_loader: torch.utils.data.DataLoader,
@@ -79,6 +80,7 @@ class Trainer:
         """
         self.model = model
         self.loss_func = loss_func
+        self.loss_func_diff = loss_func_diff
         self.optimizer = optimizer
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -174,6 +176,7 @@ class Trainer:
                 self.optimizer,
                 self.train_loader,
                 self.loss_func,
+                self.loss_func_diff,
                 self.device,
                 results,
                 self.score_funcs,
@@ -195,6 +198,7 @@ class Trainer:
                         self.optimizer,
                         self.val_loader,
                         self.loss_func,
+                        self.loss_func_diff,
                         self.device,
                         results,
                         self.score_funcs,
@@ -242,6 +246,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         data_loader: torch.utils.data.DataLoader,
         loss_func: _Loss,
+        loss_func_diff: _Loss,
         device: str,
         results: dict[str, list],
         score_funcs: dict[str, Callable] | None,
@@ -304,14 +309,18 @@ class Trainer:
         )
         metrics = {}
         start = time.time()
-        for i, (inputs, labels) in enumerate(data_loader):
+        for i, (inputs, labels, labels_diff) in enumerate(data_loader):
             # Move the batch to the device we are using.
             inputs = inputs.to(device)
             labels = labels.to(device)
+            labels_diff = labels_diff.to(device)
 
-            y_hat = model(inputs)  # this just computed f_Θ(x(i))
+            y_hat, y_hat_diff = model(inputs)  # this just computed f_Θ(x(i))
             # Compute loss.
-            loss = loss_func(y_hat, labels)
+            loss_ = loss_func(y_hat, labels)
+            loss_diff = loss_func_diff(y_hat_diff, labels_diff)
+
+            loss = loss_ + loss_diff
 
             if model.training:
                 loss.backward()

@@ -60,6 +60,7 @@ class WaveNet(nn.Module):
         self.batchnorm4 = nn.BatchNorm1d(128)
         self.wave_block5 = WaveBlock(128, 14, 1, kernel_size)
         self.pool = nn.AdaptiveAvgPool1d(1)
+        self.wave_block6 = WaveBlock(128, 14, 1, kernel_size)
 
     def forward(self, x_seq):
         x = self.wave_block1(x_seq)
@@ -69,12 +70,15 @@ class WaveNet(nn.Module):
         x = self.wave_block3(x)
         x = self.batchnorm3(x)
         x = self.wave_block4(x)
-        x = self.batchnorm4(x)
-        x = self.wave_block5(x)
+        x_out = self.batchnorm4(x)
+        x = self.wave_block5(x_out)
+        x_diff = self.wave_block6(x_out)
+
+        x_diff = x_diff[:, :6, :].reshape(x_diff.size(0), -1)
 
         x_seq = x[:, :6, :].reshape(x.size(0), -1)
         x_scalar = self.pool(x[:, 6:, :]).squeeze(dim=-1)
 
         x = torch.cat((x_seq, x_scalar), dim=1)
 
-        return x
+        return x, x_diff

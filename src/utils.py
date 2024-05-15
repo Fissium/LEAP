@@ -82,25 +82,6 @@ class XScaler:
         return X
 
 
-class YScaler:
-    def __init__(self, min_std=1e-8):
-        self.mean: np.ndarray  # type: ignore
-        self.s: np.ndarray  # type: ignore
-        self.min_std = min_std
-
-    def fit(self, y: np.ndarray):
-        self.mean = y.mean(axis=0)
-        self.s = np.maximum(np.sqrt((y * y).mean(axis=0)), self.min_std)
-
-    def transform(self, y: np.ndarray) -> np.ndarray:
-        y = (y - self.mean.reshape(1, -1)) / self.s.reshape(1, -1)
-        return y
-
-    def inverse_transform(self, y: np.ndarray) -> np.ndarray:
-        y = y * self.s.reshape(1, -1) + self.mean.reshape(1, -1)
-        return y
-
-
 class EarlyStopping:
     """Early stops the training if val loss doesn't improve after a given patience."""
 

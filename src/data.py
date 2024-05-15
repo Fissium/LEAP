@@ -75,11 +75,15 @@ class NumpyDataset(Dataset):
         x_scalar = np.repeat(x_scalar, 60, axis=1).reshape(16, 60)
 
         x_seq = np.concatenate((x_seq, x_scalar), axis=0)
-        # x_seq = x[:, :360].reshape(6, 60)
-        # x_scalar = np.concatenate((x[:, -180:], x[:, 360:376]), axis=1).reshape(-1)
+        # y is 6 by 60 sequences, get the difference of each sequence
+        y_diff = (
+            np.diff(self.y[index][:360].reshape(6, 60), axis=1, prepend=0)
+            .reshape(-1)
+            .astype(np.float32)
+        )
 
         return (
             torch.from_numpy(x_seq),
-            # torch.from_numpy(x_scalar),
             torch.from_numpy(self.y[index]),
+            torch.from_numpy(y_diff),
         )
