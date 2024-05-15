@@ -47,13 +47,8 @@ def eval(
     preds = []
     targets = []
     with torch.no_grad():
-        for inputs_seq, inputs_scalar, labels in tqdm(val_loader):
-            preds.append(
-                model(inputs_seq.to(device), inputs_scalar.to(device))
-                .detach()
-                .cpu()
-                .numpy()
-            )
+        for inputs, labels in tqdm(val_loader):
+            preds.append(model(inputs.to(device)).detach().cpu().numpy())
             targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
@@ -109,13 +104,8 @@ def predict(
 
     preds = []
     with torch.no_grad():
-        for inputs_seq, inputs_scalar, _ in tqdm(test_loader):
-            preds.append(
-                model(inputs_seq.to(device), inputs_scalar.to(device))
-                .detach()
-                .cpu()
-                .numpy()
-            )
+        for inputs, _ in tqdm(test_loader):
+            preds.append(model(inputs.to(device)).detach().cpu().numpy())
     preds = np.concatenate(preds)
     preds[:, TRICK_INDXS] = -X_trick / 1200  # type: ignore
 

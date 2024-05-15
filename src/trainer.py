@@ -304,13 +304,12 @@ class Trainer:
         )
         metrics = {}
         start = time.time()
-        for i, (inputs_seq, inputs_scalar, labels) in enumerate(data_loader):
+        for i, (inputs, labels) in enumerate(data_loader):
             # Move the batch to the device we are using.
-            inputs_seq = inputs_seq.to(device)
-            inputs_scalar = inputs_scalar.to(device)
+            inputs = inputs.to(device)
             labels = labels.to(device)
 
-            y_hat = model(inputs_seq, inputs_scalar)  # this just computed f_Θ(x(i))
+            y_hat = model(inputs)  # this just computed f_Θ(x(i))
             # Compute loss.
             loss = loss_func(y_hat, labels)
 

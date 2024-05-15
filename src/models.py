@@ -51,20 +51,30 @@ class WaveNet(nn.Module):
     def __init__(self, inch=9, kernel_size=3):
         super().__init__()
         self.wave_block1 = WaveBlock(inch, 16, 12, kernel_size)
+        self.batchnorm1 = nn.BatchNorm1d(16)
         self.wave_block2 = WaveBlock(16, 32, 8, kernel_size)
+        self.batchnorm2 = nn.BatchNorm1d(32)
         self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
+        self.batchnorm3 = nn.BatchNorm1d(64)
         self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
-        self.wave_block5 = WaveBlock(128, 6, 1, kernel_size)
-        self.fc_in = nn.Linear(360 + 16 + 180, 256)
-        self.fc_out = nn.Linear(256, 8)
+        self.batchnorm4 = nn.BatchNorm1d(128)
+        self.wave_block5 = WaveBlock(128, 14, 1, kernel_size)
+        self.pool = nn.AdaptiveAvgPool1d(1)
 
-    def forward(self, x_seq, x_scalar):
+    def forward(self, x_seq):
         x = self.wave_block1(x_seq)
+        x = self.batchnorm1(x)
         x = self.wave_block2(x)
+        x = self.batchnorm2(x)
         x = self.wave_block3(x)
+        x = self.batchnorm3(x)
         x = self.wave_block4(x)
+        x = self.batchnorm4(x)
         x = self.wave_block5(x)
-        x_seq_out = x.reshape(x.shape[0], -1)
-        y = nn.functional.gelu(self.fc_in(torch.cat((x_seq_out, x_scalar), dim=1)))
-        y = self.fc_out(y)
-        return torch.cat((x_seq_out, y), dim=1)
+
+        x_seq = x[:, :6, :].reshape(x.size(0), -1)
+        x_scalar = self.pool(x[:, 6:, :]).squeeze(dim=-1)
+
+        x = torch.cat((x_seq, x_scalar), dim=1)
+
+        return x

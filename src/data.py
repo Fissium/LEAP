@@ -64,18 +64,22 @@ class NumpyDataset(Dataset):
 
         x = self.x[index].reshape(1, -1)
         # Convert the data to tensors when requested
-        # x_seq = np.concatenate(
-        #     (
-        #         x[:, :360].reshape(6, 60),
-        #         x[:, -180:].reshape(3, 60),
-        #     ),
-        #     axis=0,
-        # )
-        x_seq = x[:, :360].reshape(6, 60)
-        x_scalar = np.concatenate((x[:, -180:], x[:, 360:376]), axis=1).reshape(-1)
+        x_seq = np.concatenate(
+            (
+                x[:, :360].reshape(6, 60),
+                x[:, -180:].reshape(3, 60),
+            ),
+            axis=0,
+        )
+        x_scalar = x[:, 360:376].reshape(1, -1)
+        x_scalar = np.repeat(x_scalar, 60, axis=1).reshape(16, 60)
+
+        x_seq = np.concatenate((x_seq, x_scalar), axis=0)
+        # x_seq = x[:, :360].reshape(6, 60)
+        # x_scalar = np.concatenate((x[:, -180:], x[:, 360:376]), axis=1).reshape(-1)
 
         return (
             torch.from_numpy(x_seq),
-            torch.from_numpy(x_scalar),
+            # torch.from_numpy(x_scalar),
             torch.from_numpy(self.y[index]),
         )
