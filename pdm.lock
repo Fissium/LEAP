@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:502ec92115c7301304ff25046af188b15dad598ddd23c422227b0b157b21dfcb"
+content_hash = "sha256:d79af05f57be97730e831df2b69d47a4b25828fe57f2333206c8caa6723113e4"
 
 [[package]]
 name = "antlr4-python3-runtime"
@@ -823,6 +823,20 @@ files = [
 ]
 
 [[package]]
+name = "pytorch-ranger"
+version = "0.1.1"
+requires_python = ">=3.5"
+summary = "Ranger - a synergistic optimizer using RAdam (Rectified Adam) and LookAhead in one codebase "
+groups = ["default"]
+dependencies = [
+    "torch",
+]
+files = [
+    {file = "pytorch_ranger-0.1.1-py3-none-any.whl", hash = "sha256:1e69156c9cc8439185cb8ba4725b18c91947fbe72743e25aca937da8aeb0c8ec"},
+    {file = "pytorch_ranger-0.1.1.tar.gz", hash = "sha256:aa7115431cef11b57d7dd7bc86e7302a911dae467f62ec5d0b10e1ff744875db"},
+]
+
+[[package]]
 name = "pytz"
 version = "2024.1"
 summary = "World timezone definitions, modern and historical"
@@ -1058,6 +1072,21 @@ files = [
     {file = "torch-2.3.0-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:bce43af735c3da16cc14c7de2be7ad038e2fbf75654c2e274e575c6c05772ace"},
     {file = "torch-2.3.0-cp311-cp311-win_amd64.whl", hash = "sha256:729804e97b7cf19ae9ab4181f91f5e612af07956f35c8b2c8e9d9f3596a8e877"},
     {file = "torch-2.3.0-cp311-none-macosx_11_0_arm64.whl", hash = "sha256:d24e328226d8e2af7cf80fcb1d2f1d108e0de32777fab4aaa2b37b9765d8be73"},
+]
+
+[[package]]
+name = "torch-optimizer"
+version = "0.3.0"
+requires_python = ">=3.6.0"
+summary = "pytorch-optimizer"
+groups = ["default"]
+dependencies = [
+    "pytorch-ranger>=0.1.1",
+    "torch>=1.5.0",
+]
+files = [
+    {file = "torch-optimizer-0.3.0.tar.gz", hash = "sha256:b2180629df9d6cd7a2aeabe71fa4a872bba938e8e275965092568cd9931b924c"},
+    {file = "torch_optimizer-0.3.0-py3-none-any.whl", hash = "sha256:7de8e57315e43561cdd0370a1b67303cc8ef1b053f9b5573de629a62390f2af9"},
 ]
 
 [[package]]

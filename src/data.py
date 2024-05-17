@@ -63,6 +63,7 @@ class NumpyDataset(Dataset):
         """
 
         x = self.x[index].reshape(1, -1)
+        y = self.y[index]
         # Convert the data to tensors when requested
         x_seq = np.concatenate(
             (
@@ -76,14 +77,21 @@ class NumpyDataset(Dataset):
 
         x_seq = np.concatenate((x_seq, x_scalar), axis=0)
         # y is 6 by 60 sequences, get the difference of each sequence
-        y_diff = (
-            np.diff(self.y[index][:360].reshape(6, 60), axis=1, prepend=0)
+        y_delta_first = (
+            np.diff(y[:360].reshape(6, 60), axis=1, prepend=0)
+            .reshape(-1)
+            .astype(np.float32)
+        )
+
+        y_delta_second = (
+            np.diff(y_delta_first.reshape(6, 60), axis=1, prepend=0)
             .reshape(-1)
             .astype(np.float32)
         )
 
         return (
             torch.from_numpy(x_seq),
-            torch.from_numpy(self.y[index]),
-            torch.from_numpy(y_diff),
+            torch.from_numpy(y),
+            torch.from_numpy(y_delta_first),
+            torch.from_numpy(y_delta_second),
         )

@@ -47,8 +47,8 @@ def eval(
     preds = []
     targets = []
     with torch.no_grad():
-        for inputs, labels, _ in tqdm(val_loader):
-            y_hat, _ = model(inputs.to(device))
+        for inputs, labels, *_ in tqdm(val_loader):
+            y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
             targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
@@ -106,7 +106,7 @@ def predict(
     preds = []
     with torch.no_grad():
         for inputs, *_ in tqdm(test_loader):
-            y_hat, _ = model(inputs.to(device))
+            y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
     preds = np.concatenate(preds)
     preds[:, TRICK_INDXS] = -X_trick / 1200  # type: ignore
@@ -218,8 +218,9 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
-    criterion = nn.MSELoss()
-    criterion_diff = nn.L1Loss()
+    criterion = nn.L1Loss()
+    criterion_delta_first = nn.L1Loss()
+    criterion_delta_second = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
@@ -228,7 +229,8 @@ def main(cfg: DictConfig):
     trainer = Trainer(
         model=model,
         loss_func=criterion,
-        loss_func_diff=criterion_diff,
+        loss_func_delta_first=criterion_delta_first,
+        loss_func_delta_second=criterion_delta_second,
         optimizer=optimizer,
         train_loader=train_loader,
         val_loader=val_loader,

@@ -9,7 +9,7 @@ hydra_dir: ${logs_root}/${now:%Y-%m-%d}_${now:%H-%M-%S}
 seed: 42
 
 dataset:
-  n_rows: 1_000_000
+  n_rows: 100_000
   train_val_split: [0.8, 0.2]
   batch_size: 128
   num_workers: 10

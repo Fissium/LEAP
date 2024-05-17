@@ -31,7 +31,8 @@ class Trainer:
         self,
         model: nn.Module,
         loss_func: _Loss,
-        loss_func_diff: _Loss,
+        loss_func_delta_first: _Loss,
+        loss_func_delta_second: _Loss,
         checkpoint_dir: Path,
         optimizer: torch.optim.Optimizer,
         train_loader: torch.utils.data.DataLoader,
@@ -52,6 +53,10 @@ class Trainer:
             The Pytorch model / "Moduel" to train.
         loss_func
             The loss function.
+        loss_func_delta_first
+            The loss function for the first derivative.
+        loss_func_delta_second
+            The loss function for the second derivative.
         optimizer
             The optimizer.
         train_loader
@@ -80,7 +85,8 @@ class Trainer:
         """
         self.model = model
         self.loss_func = loss_func
-        self.loss_func_diff = loss_func_diff
+        self.loss_func_delta_first = loss_func_delta_first
+        self.loss_func_delta_second = loss_func_delta_second
         self.optimizer = optimizer
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -176,7 +182,8 @@ class Trainer:
                 self.optimizer,
                 self.train_loader,
                 self.loss_func,
-                self.loss_func_diff,
+                self.loss_func_delta_first,
+                self.loss_func_delta_second,
                 self.device,
                 results,
                 self.score_funcs,
@@ -198,7 +205,8 @@ class Trainer:
                         self.optimizer,
                         self.val_loader,
                         self.loss_func,
-                        self.loss_func_diff,
+                        self.loss_func_delta_first,
+                        self.loss_func_delta_second,
                         self.device,
                         results,
                         self.score_funcs,
@@ -246,7 +254,8 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         data_loader: torch.utils.data.DataLoader,
         loss_func: _Loss,
-        loss_func_diff: _Loss,
+        loss_func_delta_first: _Loss,
+        loss_func_delta_second: _Loss,
         device: str,
         results: dict[str, list],
         score_funcs: dict[str, Callable] | None,
@@ -264,6 +273,10 @@ class Trainer:
             DataLoader object that returns tuples of (input, label) pairs.
         loss_func
             The loss function.
+        loss_func_delta_first
+            The loss function for the first derivative.
+        loss_func_delta_second
+            The loss function for the second derivative.
         device
             The compute lodation to perform training.
         results
@@ -309,18 +322,26 @@ class Trainer:
         )
         metrics = {}
         start = time.time()
-        for i, (inputs, labels, labels_diff) in enumerate(data_loader):
+        for i, (inputs, labels, labels_delta_first, labels_delta_second) in enumerate(
+            data_loader
+        ):
             # Move the batch to the device we are using.
             inputs = inputs.to(device)
             labels = labels.to(device)
-            labels_diff = labels_diff.to(device)
+            labels_delta_first = labels_delta_first.to(device)
+            labels_delta_second = labels_delta_second.to(device)
 
-            y_hat, y_hat_diff = model(inputs)  # this just computed f_Θ(x(i))
+            y_hat, y_hat_diff, y_hat_diff_diff = model(
+                inputs
+            )  # this just computed f_Θ(x(i))
             # Compute loss.
             loss_ = loss_func(y_hat, labels)
-            loss_diff = loss_func_diff(y_hat_diff, labels_diff)
+            loss_delta_first = loss_func_delta_first(y_hat_diff, labels_delta_first)
+            loss_delta_second = loss_func_delta_second(
+                y_hat_diff_diff, labels_delta_second
+            )
 
-            loss = loss_ + loss_diff
+            loss = loss_ + loss_delta_first + loss_delta_second
 
             if model.training:
                 loss.backward()
