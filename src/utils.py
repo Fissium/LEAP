@@ -21,6 +21,8 @@ TRICK_INDXS = [
     145,
     146,
     147,
+    148,
+    149,
 ]
 
 
@@ -144,7 +146,7 @@ class EarlyStopping:
         epoch: int,
         path: Path,
     ) -> None:
-        score = -val_loss
+        score = val_loss
 
         if self.best_score is None:
             self.best_score = score
@@ -171,7 +173,7 @@ class EarlyStopping:
         """Saves model when validation loss decrease."""
         if self.verbose:
             logger.info(
-                f"\nValidation loss decreased ({self.val_loss_min:.6f} -->"
+                f"\nValidation metric increased ({self.val_loss_min:.6f} -->"
                 f" {val_loss:.6f}).  Saving model ...",
             )
         if self.on_each_epoch:

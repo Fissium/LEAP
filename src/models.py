@@ -58,10 +58,10 @@ class WaveNet(nn.Module):
         self.batchnorm3 = nn.BatchNorm1d(64)
         self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
         self.batchnorm4 = nn.BatchNorm1d(128)
-        self.wave_block5 = WaveBlock(128, 14, 1, kernel_size)
+        self.wave_block_x = WaveBlock(128, 14, 1, kernel_size)
         self.pool = nn.AdaptiveAvgPool1d(1)
-        self.wave_block6 = WaveBlock(128, 14, 1, kernel_size)
-        self.wave_block7 = WaveBlock(128, 14, 1, kernel_size)
+        self.wave_block_delta_first = WaveBlock(128, 14, 1, kernel_size)
+        self.wave_block_x_delta_second = WaveBlock(128, 14, 1, kernel_size)
 
     def forward(self, x):
         x = self.wave_block1(x)
@@ -72,9 +72,9 @@ class WaveNet(nn.Module):
         x = self.batchnorm3(x)
         x = self.wave_block4(x)
         x_shared = self.batchnorm4(x)
-        x = self.wave_block5(x_shared)
-        x_delta_first = self.wave_block6(x_shared)
-        x_delta_second = self.wave_block7(x_shared)
+        x = self.wave_block_x(x_shared)
+        x_delta_first = self.wave_block_delta_first(x_shared)
+        x_delta_second = self.wave_block_x_delta_second(x_shared)
 
         x_delta_first = x_delta_first[:, :6, :].reshape(x_delta_first.size(0), -1)
         x_delta_second = x_delta_second[:, :6, :].reshape(x_delta_second.size(0), -1)

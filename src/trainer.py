@@ -218,7 +218,7 @@ class Trainer:
 
                     if self.early_stopping is not None:
                         self.early_stopping(
-                            metrics["val_loss"],
+                            metrics["val_r2"],
                             self.model,
                             epoch,
                             self.checkpoint_dir,
@@ -233,7 +233,7 @@ class Trainer:
 
                     if self.lr_scheduler is not None:
                         if isinstance(self.lr_scheduler, ReduceLROnPlateau):
-                            self.lr_scheduler.step(metrics["val_loss"])
+                            self.lr_scheduler.step(metrics["val_r2"])
                         else:
                             self.lr_scheduler.step()
                     metrics.update({"lr": self.optimizer.param_groups[0]["lr"]})

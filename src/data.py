@@ -15,21 +15,32 @@ def read_data(
     train_val_split: tuple[float, float],
     features: list[str],
     targets: list[str],
+    batch_size: int = 100_000,
 ) -> tuple[np.ndarray, ...]:
-    df = (
-        pl.read_csv(
-            data_dir.joinpath(train_filename), n_rows=n_rows, columns=range(1, 925)
-        )
-        .to_pandas()
-        .astype("float32")
-    )
-
     weights = pd.read_csv(
         data_dir.joinpath(ss_filename), nrows=1, usecols=range(1, 369)
     ).astype("float32")
 
-    X = df[features].to_numpy()
-    y = df[targets].to_numpy() * weights.to_numpy().reshape(1, -1)
+    X = np.zeros((n_rows, len(features)), dtype=np.float32)
+    y = np.zeros((n_rows, len(targets)), dtype=np.float32)
+    offset = 0
+    for batch_start in range(0, n_rows, batch_size):
+        batch_end = min(batch_start + batch_size, n_rows)
+        df = (
+            pl.read_csv(
+                data_dir.joinpath(train_filename),
+                n_rows=batch_end - batch_start,
+                columns=range(1, 925),
+                row_index_offset=offset,
+            )
+            .to_pandas()
+            .astype("float32")
+        )
+        X[batch_start:batch_end, :] = df[features].to_numpy()
+        y[batch_start:batch_end, :] = df[
+            targets
+        ].to_numpy() * weights.to_numpy().reshape(1, -1)
+        offset += batch_end - batch_start
 
     train_size = int(len(X) * train_val_split[0])
 
@@ -64,7 +75,7 @@ class NumpyDataset(Dataset):
 
         x = self.x[index].reshape(1, -1)
         y = self.y[index]
-        # Convert the data to tensors when requested
+
         x_seq = np.concatenate(
             (
                 x[:, :360].reshape(6, 60),
@@ -76,6 +87,7 @@ class NumpyDataset(Dataset):
         x_scalar = np.repeat(x_scalar, 60, axis=1).reshape(16, 60)
 
         x_seq = np.concatenate((x_seq, x_scalar), axis=0)
+
         # y is 6 by 60 sequences, get the difference of each sequence
         y_delta_first = (
             np.diff(y[:360].reshape(6, 60), axis=1, prepend=0)
