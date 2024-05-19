@@ -22,7 +22,7 @@ early_stopping:
   on_each_epoch: False
 
 optimizer:
-  _target_: torch.optim.Adam
+  _target_: torch.optim.NAdam
   _partial_: true
   lr: 1e-3
   weight_decay: 0.0
@@ -35,8 +35,8 @@ scheduler:
   patience: 5
 
 model:
-  _target_: src.models.WaveNet
-  inch: 25
+  _target_: src.models.wavenet.Model
+  in_channels: 25
   kernel_size: 3
 
 trainer:

@@ -48,40 +48,38 @@ class WaveBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, inch=9, kernel_size=3):
+    def __init__(self, in_channels: int, kernel_size: int):
         super().__init__()
-        self.wave_block1 = WaveBlock(inch, 16, 12, kernel_size)
-        self.batchnorm1 = nn.BatchNorm1d(16)
-        self.wave_block2 = WaveBlock(16, 32, 8, kernel_size)
-        self.batchnorm2 = nn.BatchNorm1d(32)
-        self.wave_block3 = WaveBlock(32, 64, 4, kernel_size)
-        self.batchnorm3 = nn.BatchNorm1d(64)
-        self.wave_block4 = WaveBlock(64, 128, 1, kernel_size)
-        self.batchnorm4 = nn.BatchNorm1d(128)
-        self.wave_block_x = WaveBlock(128, 14, 1, kernel_size)
-        self.pool = nn.AdaptiveAvgPool1d(1)
-        self.wave_block_delta_first = WaveBlock(128, 14, 1, kernel_size)
-        self.wave_block_x_delta_second = WaveBlock(128, 14, 1, kernel_size)
+        self.model = nn.Sequential(
+            WaveBlock(in_channels, 16, 12, kernel_size),
+            nn.BatchNorm1d(16),
+            WaveBlock(16, 32, 8, kernel_size),
+            nn.BatchNorm1d(32),
+            WaveBlock(32, 64, 4, kernel_size),
+            nn.BatchNorm1d(64),
+            WaveBlock(64, 128, 1, kernel_size),
+            nn.BatchNorm1d(128),
+            WaveBlock(128, 3 * 6 + 8, 1, kernel_size),
+        )
 
     def forward(self, x):
-        x = self.wave_block1(x)
-        x = self.batchnorm1(x)
-        x = self.wave_block2(x)
-        x = self.batchnorm2(x)
-        x = self.wave_block3(x)
-        x = self.batchnorm3(x)
-        x = self.wave_block4(x)
-        x_shared = self.batchnorm4(x)
-        x = self.wave_block_x(x_shared)
-        x_delta_first = self.wave_block_delta_first(x_shared)
-        x_delta_second = self.wave_block_x_delta_second(x_shared)
+        return self.model(x)
 
-        x_delta_first = x_delta_first[:, :6, :].reshape(x_delta_first.size(0), -1)
-        x_delta_second = x_delta_second[:, :6, :].reshape(x_delta_second.size(0), -1)
 
+class Model(nn.Module):
+    def __init__(self, in_channels: int, kernel_size: int):
+        super().__init__()
+        self.model = WaveNet(in_channels, kernel_size)
+        self.global_avg_pool = nn.AdaptiveAvgPool1d(1)
+
+    def forward(self, x):
+        x = self.model(x)
         x_seq = x[:, :6, :].reshape(x.size(0), -1)
-        x_scalar = self.pool(x[:, 6:, :]).squeeze(dim=-1)
+        x_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
+        x_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
-        x = torch.cat((x_seq, x_scalar), dim=1)
+        x_scalar = self.global_avg_pool(x[:, 18:, :]).squeeze(dim=-1)
 
-        return x, x_delta_first, x_delta_second
+        x_seq = torch.cat((x_seq, x_scalar), dim=1)
+
+        return x_seq, x_delta_first, x_delta_second
