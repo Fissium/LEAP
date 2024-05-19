@@ -52,28 +52,29 @@ def read_data(
 
 
 class NumpyDataset(Dataset):
-    def __init__(self, x, y):
+    def __init__(self, X: np.ndarray, y: np.ndarray, mode: str):
         """
         Initialize with NumPy arrays.
         """
         assert (
-            x.shape[0] == y.shape[0]
+            X.shape[0] == y.shape[0]
         ), "Features and labels must have the same number of samples"
-        self.x = x
+        self.X = X
         self.y = y
+        self.mode = mode
 
     def __len__(self):
         """
         Total number of samples.
         """
-        return self.x.shape[0]
+        return self.X.shape[0]
 
-    def __getitem__(self, index) -> tuple[torch.Tensor, ...]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, ...]:
         """
         Generate one sample of data.
         """
 
-        x = self.x[index].reshape(1, -1)
+        x = self.X[index].reshape(1, -1)
         y = self.y[index]
 
         x_seq = np.concatenate(

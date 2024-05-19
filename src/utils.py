@@ -26,6 +26,13 @@ TRICK_INDXS = [
 ]
 
 
+def noise(x: np.ndarray, y: np.ndarray, sigma=0.01):
+    gauss = np.random.normal(0, sigma, x.shape).astype(np.float32)
+    x_ = x.copy()
+    x_ = x + gauss
+    return x_, y
+
+
 def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)

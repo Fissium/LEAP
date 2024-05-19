@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class WaveBlock(nn.Module):
@@ -47,18 +48,42 @@ class WaveBlock(nn.Module):
         return res
 
 
+class AttentionBlock(nn.Module):
+    def __init__(self, in_channels: int):
+        super().__init__()
+        self.query_conv = nn.Conv1d(in_channels, in_channels, kernel_size=1)
+        self.key_conv = nn.Conv1d(in_channels, in_channels, kernel_size=1)
+        self.value_conv = nn.Conv1d(in_channels, in_channels, kernel_size=1)
+        self.scale = in_channels**-0.5
+
+    def forward(self, x):
+        query = self.query_conv(x)
+        key = self.key_conv(x)
+        value = self.value_conv(x)
+
+        scores = torch.bmm(query.permute(0, 2, 1), key) * self.scale
+        attention_weights = F.softmax(scores, dim=-1)
+        context = torch.bmm(attention_weights, value.permute(0, 2, 1)).permute(0, 2, 1)
+
+        return context + x
+
+
 class WaveNet(nn.Module):
     def __init__(self, in_channels: int, kernel_size: int):
         super().__init__()
         self.model = nn.Sequential(
             WaveBlock(in_channels, 16, 12, kernel_size),
             nn.BatchNorm1d(16),
+            AttentionBlock(16),
             WaveBlock(16, 32, 8, kernel_size),
             nn.BatchNorm1d(32),
+            AttentionBlock(32),
             WaveBlock(32, 64, 4, kernel_size),
             nn.BatchNorm1d(64),
+            AttentionBlock(64),
             WaveBlock(64, 128, 1, kernel_size),
             nn.BatchNorm1d(128),
+            AttentionBlock(128),
             WaveBlock(128, 3 * 6 + 8, 1, kernel_size),
         )
 
