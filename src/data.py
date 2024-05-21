@@ -42,7 +42,7 @@ def read_data(
         )
         y[batch_start:batch_end, :] = (
             df.to_pandas()[targets].astype("float32").to_numpy()
-        )
+        ) * weights.to_numpy().reshape(1, -1)
 
         del df
 
