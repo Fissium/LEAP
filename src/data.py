@@ -15,7 +15,7 @@ def read_data(
     train_val_split: tuple[float, float],
     features: list[str],
     targets: list[str],
-    batch_size: int = 100_000,
+    batch_size: int = 500_000,
 ) -> tuple[np.ndarray, ...]:
     weights = pd.read_csv(
         data_dir.joinpath(ss_filename), nrows=1, usecols=range(1, 369)
