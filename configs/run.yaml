@@ -35,9 +35,14 @@ scheduler:
   patience: 5
 
 model:
-  _target_: src.models.wavenet.Model
+  _target_: src.models.transformer.Model
   in_channels: 25
-  kernel_size: 3
+  d_model: 192
+  num_layers: 3
+  nheads: 4
+  forward_expansion: 2
+  dropout: 0.0
+  max_len: 60
 
 trainer:
   epochs: 300
