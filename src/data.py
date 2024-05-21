@@ -25,7 +25,7 @@ def read_data(
     y = np.zeros((n_rows, len(targets)), dtype=np.float32)
 
     reader = pl.scan_csv(
-        Path("../data/").joinpath(train_filename),
+        Path(data_dir).joinpath(train_filename),
         n_rows=n_rows,
     )
 
