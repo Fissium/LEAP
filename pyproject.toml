@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "My solution for LEAP Kaggle competition"
 authors = [{ name = "Nikita Rubinkovskiy", email = "narubinkovskiy@gmail.com" }]
 dependencies = [
-    "torch>=2.3.0",
+    "torch<=2.1.1,>=2.0",
     "polars>=0.20.23",
     "numpy>=1.26.4",
     "rootutils>=1.0.7",
