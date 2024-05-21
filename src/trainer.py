@@ -322,23 +322,21 @@ class Trainer:
         )
         metrics = {}
         start = time.time()
-        for i, (inputs, labels, labels_delta_first, labels_delta_second) in enumerate(
-            data_loader
-        ):
+        for i, (inputs, y, y_delta_first, y_delta_second) in enumerate(data_loader):
             # Move the batch to the device we are using.
             inputs = inputs.to(device)
-            labels = labels.to(device)
-            labels_delta_first = labels_delta_first.to(device)
-            labels_delta_second = labels_delta_second.to(device)
+            y = y.to(device)
+            y_delta_first = y_delta_first.to(device)
+            y_delta_second = y_delta_second.to(device)
 
-            y_hat, y_hat_diff, y_hat_diff_diff = model(
+            y_hat, y_hat_delta_first, y_hat_delta_second = model(
                 inputs
             )  # this just computed f_Θ(x(i))
             # Compute loss.
-            loss_ = loss_func(y_hat, labels)
-            loss_delta_first = loss_func_delta_first(y_hat_diff, labels_delta_first)
+            loss_ = loss_func(y_hat, y)
+            loss_delta_first = loss_func_delta_first(y_hat_delta_first, y_delta_first)
             loss_delta_second = loss_func_delta_second(
-                y_hat_diff_diff, labels_delta_second
+                y_hat_delta_second, y_delta_second
             )
 
             loss = loss_ + loss_delta_first + loss_delta_second
@@ -357,17 +355,17 @@ class Trainer:
             if pbar is not None and prefix == "train":
                 pbar.update(i, values=[("loss", loss)])
 
-            if score_funcs is not None and isinstance(labels, torch.Tensor):
+            if score_funcs is not None and isinstance(y, torch.Tensor):
                 # moving labels & predictions back to CPU
-                labels = labels.detach().cpu().numpy()
+                y = y.detach().cpu().numpy()
                 y_hat = y_hat.detach().cpu().numpy()
 
-                adj_batch_size = labels.shape[0]
+                adj_batch_size = y.shape[0]
 
                 # add to predictions so far
                 # handle the case where the batch size does not divide the dataset size
                 y_pred[i * batch_size : i * batch_size + adj_batch_size] = y_hat
-                y_true[i * batch_size : i * batch_size + adj_batch_size] = labels
+                y_true[i * batch_size : i * batch_size + adj_batch_size] = y
 
         if self.postprocessor is not None:
             y_pred, y_true = self.postprocessor(y_pred, y_true, model.training)

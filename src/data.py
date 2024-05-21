@@ -23,24 +23,28 @@ def read_data(
 
     X = np.zeros((n_rows, len(features)), dtype=np.float32)
     y = np.zeros((n_rows, len(targets)), dtype=np.float32)
-    offset = 0
+
+    reader = pl.scan_csv(
+        Path("../data/").joinpath(train_filename),
+        n_rows=n_rows,
+    )
+
+    X = np.zeros((n_rows, len(features)), dtype=np.float32)
+    y = np.zeros((n_rows, len(targets)), dtype=np.float32)
+
     for batch_start in range(0, n_rows, batch_size):
         batch_end = min(batch_start + batch_size, n_rows)
-        df = (
-            pl.read_csv(
-                data_dir.joinpath(train_filename),
-                n_rows=batch_end - batch_start,
-                columns=range(1, 925),
-                row_index_offset=offset,
-            )
-            .to_pandas()
-            .astype("float32")
+
+        df = reader.slice(batch_start, batch_end - batch_start).collect()
+
+        X[batch_start:batch_end, :] = (
+            df.to_pandas()[features].astype("float32").to_numpy()
         )
-        X[batch_start:batch_end, :] = df[features].to_numpy()
-        y[batch_start:batch_end, :] = df[
-            targets
-        ].to_numpy() * weights.to_numpy().reshape(1, -1)
-        offset += batch_end - batch_start
+        y[batch_start:batch_end, :] = (
+            df.to_pandas()[targets].astype("float32").to_numpy()
+        )
+
+        del df
 
     train_size = int(len(X) * train_val_split[0])
 
@@ -52,7 +56,7 @@ def read_data(
 
 
 class NumpyDataset(Dataset):
-    def __init__(self, X: np.ndarray, y: np.ndarray, mode: str):
+    def __init__(self, X: np.ndarray, y: np.ndarray):
         """
         Initialize with NumPy arrays.
         """
@@ -61,7 +65,6 @@ class NumpyDataset(Dataset):
         ), "Features and labels must have the same number of samples"
         self.X = X
         self.y = y
-        self.mode = mode
 
     def __len__(self):
         """

@@ -29,7 +29,7 @@ from src.utils import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-torch.set_num_threads(10)
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def eval(
@@ -97,7 +97,7 @@ def predict(
 
     X = xscaler.transform(X)
 
-    test_dataset = NumpyDataset(X=X, y=np.zeros((X.shape[0], 368)), mode="test")
+    test_dataset = NumpyDataset(X=X, y=np.zeros((X.shape[0], 368)))
 
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False, drop_last=False
@@ -200,8 +200,8 @@ def main(cfg: DictConfig):
     X_train = xscaler.transform(X_train)
     X_val = xscaler.transform(X_val)
 
-    train_dataset = NumpyDataset(X=X_train, y=y_train, mode="train")
-    val_dataset = NumpyDataset(X=X_val, y=y_val, mode="val")
+    train_dataset = NumpyDataset(X=X_train, y=y_train)
+    val_dataset = NumpyDataset(X=X_val, y=y_val)
 
     train_loader = DataLoader(
         train_dataset,
