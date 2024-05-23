@@ -42,7 +42,7 @@ class TransformerEncoder(nn.Module):
                 nhead=nheads,
                 dim_feedforward=forward_expansion * d_model,
                 dropout=dropout,
-                activation="relu",
+                activation="gelu",
                 batch_first=True,
             ),
             num_layers=num_layers,
@@ -61,7 +61,7 @@ class Model(nn.Module):
         self,
         in_channels: int = 25,
         d_model: int = 192,
-        num_layers: int = 3,
+        num_layers: int = 12,
         nheads: int = 4,
         forward_expansion: int = 2,
         dropout: float = 0.0,
@@ -78,12 +78,9 @@ class Model(nn.Module):
             dropout=dropout,
             max_len=max_len,
         )
-        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=26)
-        self.global_avg_pool_scalar = nn.AdaptiveAvgPool1d(output_size=1)
+        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=19)
 
-    def forward(
-        self, x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         x = x.permute(0, 2, 1)
         x = self.embedding(x)
         x = self.transformer(x)
@@ -94,7 +91,7 @@ class Model(nn.Module):
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
         y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
-        y_scalar = self.global_avg_pool_scalar(x[:, 18:, :]).squeeze(dim=-1)
+        y_scalar = x[:, 18:, :8].reshape(x.size(0), -1)
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)
 

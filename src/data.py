@@ -77,20 +77,22 @@ class NumpyDataset(Dataset):
         Generate one sample of data.
         """
 
-        x = self.X[index].reshape(1, -1)
+        x = self.X[index]
         y = self.y[index]
 
         x_seq = np.concatenate(
             (
-                x[:, :360].reshape(6, 60),
-                x[:, -180:].reshape(3, 60),
+                x[:360].reshape(6, 60),
+                x[-180:].reshape(3, 60),
             ),
             axis=0,
         )
-        x_scalar = x[:, 360:376].reshape(1, -1)
-        x_scalar = np.repeat(x_scalar, 60, axis=1).reshape(16, 60)
+        x_seq_delta_first = np.diff(x_seq, axis=1, prepend=0).astype(np.float32)
+        x_scalar = np.pad(
+            x[360:376], (0, 60 - 16), mode="constant", constant_values=0
+        ).reshape(1, -1)
 
-        x_seq = np.concatenate((x_seq, x_scalar), axis=0)
+        x_seq = np.concatenate((x_seq, x_seq_delta_first, x_scalar), axis=0)
 
         # y is 6 by 60 sequences, get the difference of each sequence
         y_delta_first = (

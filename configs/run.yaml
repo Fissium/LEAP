@@ -16,13 +16,13 @@ dataset:
 
 early_stopping:
   _target_: src.utils.EarlyStopping
-  patience: 10
+  patience: 15
   delta: 0.0
   verbose: True
   on_each_epoch: False
 
 optimizer:
-  _target_: torch.optim.NAdam
+  _target_: torch.optim.Adam
   _partial_: true
   lr: 1e-3
   weight_decay: 0.0
@@ -32,17 +32,17 @@ scheduler:
   _partial_: true
   mode: max
   factor: 0.1
-  patience: 5
+  patience: 10
 
 model:
   _target_: src.models.transformer.Model
-  in_channels: 25
+  in_channels: 19
   d_model: 192
-  num_layers: 3
+  num_layers: 4
   nheads: 4
   forward_expansion: 2
   dropout: 0.0
-  max_len: 60
+  max_len: 5000
 
 trainer:
   epochs: 300

@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.utils.data
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -20,7 +21,6 @@ from src.data import NumpyDataset, read_data  # noqa: E402
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
     TRICK_INDXS,
-    XScaler,
     get_device,
     get_features_targets,
     postprocessor,
@@ -29,15 +29,15 @@ from src.utils import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def eval(
     model: nn.Module,
     val_loader: DataLoader,
-    device: str,
     X_val_trick: np.ndarray,
+    y_scaler,
     log_dir: Path,
+    device: str,
 ) -> np.ndarray:
     state_dict = torch.load(log_dir.joinpath("best.ckpt"))["model_state_dict"]
     model.to(device)
@@ -53,6 +53,9 @@ def eval(
             targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
+
+    preds = y_scaler.inverse_transform(preds)
+    targets = y_scaler.inverse_transform(targets)
 
     r2_scores = r2_score(targets, preds)
     logger.info(f"R2 Score before postprocessing: {r2_scores}")
@@ -78,7 +81,8 @@ def predict(
     model: nn.Module,
     device: str,
     features: list[str],
-    xscaler: XScaler,
+    x_scaler,
+    y_scaler,
     batch_size: int,
     weights: np.ndarray,
 ) -> np.ndarray:
@@ -95,7 +99,7 @@ def predict(
 
     X_trick: np.ndarray = X[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
 
-    X = xscaler.transform(X)
+    X = x_scaler.transform(X)
 
     test_dataset = NumpyDataset(X=X, y=np.zeros((X.shape[0], 368)))
 
@@ -109,6 +113,7 @@ def predict(
             y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
     preds = np.concatenate(preds)
+    preds = y_scaler.inverse_transform(preds)
     preds[:, TRICK_INDXS] = -X_trick / 1200  # type: ignore
 
     return preds
@@ -194,14 +199,20 @@ def main(cfg: DictConfig):
     X_train_trick = X_train[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
     X_val_trick = X_val[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
 
-    xscaler = XScaler()
-    xscaler.fit(X_train)
+    x_scaler = StandardScaler(with_mean=True, with_std=True)
+    x_scaler.fit(X_train)
 
-    X_train = xscaler.transform(X_train)
-    X_val = xscaler.transform(X_val)
+    X_train = x_scaler.transform(X_train)
+    X_val = x_scaler.transform(X_val)
 
-    train_dataset = NumpyDataset(X=X_train, y=y_train)
-    val_dataset = NumpyDataset(X=X_val, y=y_val)
+    y_scaler = StandardScaler(with_mean=False, with_std=True)
+    y_scaler.fit(y_train)
+
+    y_train = y_scaler.transform(y_train)
+    y_val = y_scaler.transform(y_val)
+
+    train_dataset = NumpyDataset(X=X_train, y=y_train)  # type: ignore
+    val_dataset = NumpyDataset(X=X_val, y=y_val)  # type: ignore
 
     train_loader = DataLoader(
         train_dataset,
@@ -240,7 +251,7 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor(X_train_trick, X_val_trick),
+        postprocessor=postprocessor(X_train_trick, X_val_trick, y_scaler),
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
     )
@@ -257,6 +268,7 @@ def main(cfg: DictConfig):
         device=device,
         log_dir=Path(cfg.hydra_dir),
         X_val_trick=X_val_trick,
+        y_scaler=y_scaler,
     )
 
     logger.info("Model evaluated.")
@@ -270,7 +282,8 @@ def main(cfg: DictConfig):
         model=model,
         device=device,
         features=features,
-        xscaler=xscaler,
+        x_scaler=x_scaler,
+        y_scaler=y_scaler,
         batch_size=cfg.dataset.batch_size,
         weights=weights,
     )

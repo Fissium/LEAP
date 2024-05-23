@@ -12,6 +12,7 @@ from sklearn.metrics import r2_score
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
 
+
 TRICK_INDXS = [
     140,
     141,
@@ -53,50 +54,17 @@ def get_features_targets(
     return features, targets
 
 
-class XScaler:
-    def __init__(self, min_std=1e-8):
-        self.mean: np.ndarray  # type: ignore
-        self.std: np.ndarray  # type: ignore
-        self.min_std = min_std
-
-    def fit(self, X: np.ndarray) -> None:
-        self.mean = X.mean(axis=0)
-        self.std = np.maximum(X.std(axis=0), self.min_std)
-
-    def transform(self, X: np.ndarray) -> np.ndarray:
-        X = (X - self.mean.reshape(1, -1)) / self.std.reshape(1, -1)
-        return X
-
-
-class YScaler:
-    def __init__(self, min_std=1e-8):
-        self.var: np.ndarray  # type: ignore
-        self.mean: np.ndarray  # type: ignore
-        self.min_std = min_std
-
-    def fit(self, y: np.ndarray) -> None:
-        self.mean = y.mean(axis=0).reshape(1, -1)
-        self.var = np.maximum(np.sqrt((y * y).mean(axis=0)), self.min_std).reshape(
-            1, -1
-        )
-
-    def transform(self, y: np.ndarray) -> np.ndarray:
-        y = (y - self.mean) / self.var
-        return y
-
-    def inverse_transform(self, y: np.ndarray) -> np.ndarray:
-        y = y * self.var + self.mean
-        return y
-
-
 def postprocessor(
     X_train: np.ndarray,
     X_val: np.ndarray,
+    y_scaler,
     indxs: list[int] = TRICK_INDXS,
 ) -> Callable:
     def inner(
         y_pred: np.ndarray, y_true: np.ndarray, training: bool
     ) -> tuple[np.ndarray, np.ndarray]:
+        y_pred = y_scaler.inverse_transform(y_pred)
+        y_true = y_scaler.inverse_transform(y_true)
         if training:
             y_pred[:, indxs] = -X_train / 1200
         else:
