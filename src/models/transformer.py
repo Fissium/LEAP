@@ -59,13 +59,13 @@ class TransformerEncoder(nn.Module):
 class Model(nn.Module):
     def __init__(
         self,
-        in_channels: int = 25,
+        in_channels: int = 19,
         d_model: int = 192,
-        num_layers: int = 12,
+        num_layers: int = 4,
         nheads: int = 4,
         forward_expansion: int = 2,
         dropout: float = 0.0,
-        max_len: int = 60,
+        max_len: int = 5000,
     ):
         super().__init__()
 
