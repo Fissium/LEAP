@@ -21,9 +21,6 @@ def read_data(
         data_dir.joinpath(ss_filename), nrows=1, usecols=range(1, 369)
     ).astype("float32")
 
-    X = np.zeros((n_rows, len(features)), dtype=np.float32)
-    y = np.zeros((n_rows, len(targets)), dtype=np.float32)
-
     reader = pl.scan_csv(
         Path(data_dir).joinpath(train_filename),
         n_rows=n_rows,
