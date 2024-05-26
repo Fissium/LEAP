@@ -19,10 +19,9 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.data import NumpyDataset, read_data  # noqa: E402
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
-    TRICK_INDXS,
+    MAGIC_INDEXES,
     XScaler,
     get_device,
-    get_features_targets,
     postprocessor,
     seed_everything,
 )
@@ -34,7 +33,7 @@ logger = logging.getLogger(__name__)
 def eval(
     model: nn.Module,
     val_loader: DataLoader,
-    X_val_trick: np.ndarray,
+    X_magic: np.ndarray,
     log_dir: Path,
     device: str,
 ) -> np.ndarray:
@@ -56,7 +55,7 @@ def eval(
     r2_scores = r2_score(targets, preds)
     logger.info(f"R2 Score before postprocessing: {r2_scores}")
 
-    preds[:, TRICK_INDXS] = -X_val_trick / 1200  # type: ignore
+    preds[:, MAGIC_INDEXES] = -X_magic / 1200  # type: ignore
 
     raw_r2_scores = r2_score(targets, preds, multioutput="raw_values")
 
@@ -76,7 +75,6 @@ def predict(
     test_filename: str,
     model: nn.Module,
     device: str,
-    features: list[str],
     x_scaler,
     batch_size: int,
     weights: np.ndarray,
@@ -87,12 +85,13 @@ def predict(
     model.eval()
     X = (
         pl.read_csv(data_dir.joinpath(test_filename))
-        .to_pandas()[features]
+        .to_pandas()
+        .iloc[:, 1:]
         .astype("float32")
         .to_numpy()
     )
 
-    X_trick: np.ndarray = X[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
+    X_magic: np.ndarray = X[:, MAGIC_INDEXES] * weights[:, MAGIC_INDEXES]
 
     X = x_scaler.transform(X)
 
@@ -108,7 +107,7 @@ def predict(
             y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
     preds = np.concatenate(preds)
-    preds[:, TRICK_INDXS] = -X_trick / 1200  # type: ignore
+    preds[:, MAGIC_INDEXES] = -X_magic / 1200  # type: ignore
 
     return preds
 
@@ -163,12 +162,8 @@ def main(cfg: DictConfig):
 
     device = get_device()
 
-    features, targets = get_features_targets(
-        data_dir=Path(cfg.dataset_root), train_filename=cfg.train_filename
-    )
-
-    logger.info(f"Lenght of features: {len(features)}")
-    logger.info(f"Lenght of targets: {len(targets)}")
+    logger.info(f"Lenght of features: {cfg.dataset.num_features}")
+    logger.info(f"Lenght of targets: {cfg.dataset.num_targets}")
 
     logger.info("Loading data...")
 
@@ -178,8 +173,9 @@ def main(cfg: DictConfig):
         ss_filename=cfg.ss_filename,
         n_rows=cfg.dataset.n_rows,
         train_val_split=cfg.dataset.train_val_split,
-        features=features,
-        targets=targets,
+        seed=cfg.seed,
+        num_targets=cfg.dataset.num_targets,
+        num_features=cfg.dataset.num_features,
     )
 
     logger.info("Data loaded.")
@@ -190,8 +186,7 @@ def main(cfg: DictConfig):
     logger.info(f"X_val shape: {X_val.shape}")
     logger.info(f"y_val shape: {y_val.shape}")
 
-    X_train_trick = X_train[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
-    X_val_trick = X_val[:, TRICK_INDXS] * weights[:, TRICK_INDXS]
+    X_val_magic = X_val[:, MAGIC_INDEXES] * weights[:, MAGIC_INDEXES]
 
     x_scaler = XScaler()
     x_scaler.fit(X_train)
@@ -217,7 +212,7 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
-    criterion = nn.L1Loss()
+    criterion = nn.MSELoss()
     criterion_delta_first = nn.L1Loss()
     criterion_delta_second = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
@@ -239,9 +234,10 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor(X_train_trick, X_val_trick),
+        postprocessor=postprocessor(X_magic=X_val_magic),
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
+        norm_value=cfg.trainer.norm_value,
     )
     history = trainer.train()
     history.to_csv(f"{Path(cfg.hydra_dir).joinpath('history.csv')}", index=False)
@@ -255,7 +251,7 @@ def main(cfg: DictConfig):
         val_loader=val_loader,
         device=device,
         log_dir=Path(cfg.hydra_dir),
-        X_val_trick=X_val_trick,
+        X_magic=X_val_magic,
     )
 
     logger.info("Model evaluated.")
@@ -268,7 +264,6 @@ def main(cfg: DictConfig):
         test_filename=cfg.test_filename,
         model=model,
         device=device,
-        features=features,
         x_scaler=x_scaler,
         batch_size=cfg.dataset.batch_size,
         weights=weights,

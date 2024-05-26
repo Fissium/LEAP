@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from src.utils import EarlyStopping  # noqa: E402
+from src.utils import BatchAccumulator, EarlyStopping  # noqa: E402
 
 torch.set_num_threads(10)
 
@@ -39,6 +39,7 @@ class Trainer:
         val_loader: torch.utils.data.DataLoader | None = None,
         score_funcs: dict[str, Callable] | None = None,
         epochs: int = 50,
+        norm_value: float = 1.0,
         resume_training: bool = False,
         resume_training_ckpt: Path | None = None,
         early_stopping: EarlyStopping | None = None,
@@ -67,6 +68,8 @@ class Trainer:
             A dict of scoring functions to use to evalue the model performance.
         epochs
             The number of training epochs to perform.
+        norm_value
+            The value to normalize the gradients.
         device
             The compute location to perform training.
         checkpoint_dir
@@ -92,6 +95,7 @@ class Trainer:
         self.val_loader = val_loader
         self.score_funcs = score_funcs
         self.epochs = epochs
+        self.norm_value = norm_value
         if device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
@@ -180,6 +184,7 @@ class Trainer:
             run_time, train_metrics = self.run_epoch(
                 model,
                 self.optimizer,
+                self.norm_value,
                 self.train_loader,
                 self.loss_func,
                 self.loss_func_delta_first,
@@ -203,6 +208,7 @@ class Trainer:
                     _, val_metrics = self.run_epoch(
                         self.model,
                         self.optimizer,
+                        self.norm_value,
                         self.val_loader,
                         self.loss_func,
                         self.loss_func_delta_first,
@@ -252,6 +258,7 @@ class Trainer:
         self,
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
+        norm_value: float,
         data_loader: torch.utils.data.DataLoader,
         loss_func: _Loss,
         loss_func_delta_first: _Loss,
@@ -269,6 +276,8 @@ class Trainer:
             The PyTorch model / "Module" to run for one epoch.
         optimizer
             The Pytorch optimizer.
+        norm_value
+            The value to normalize the gradients.
         data_loader
             DataLoader object that returns tuples of (input, label) pairs.
         loss_func
@@ -294,32 +303,11 @@ class Trainer:
             Epoch training time, results
         """
 
-        batch_size: int = (
-            data_loader.batch_size if data_loader.batch_size is not None else 1
+        batch_accumulator = BatchAccumulator(
+            data_loader=data_loader, is_training=model.training
         )
-        drop_last: bool = data_loader.drop_last
-
-        num_samples: int = len(data_loader.dataset)  # type: ignore
-
-        output_size: int = 368
 
         running_loss = []
-        y_true = np.zeros(
-            (
-                num_samples
-                if not drop_last
-                else batch_size * (num_samples // batch_size),
-                output_size,
-            )
-        )
-        y_pred = np.zeros(
-            (
-                num_samples
-                if not drop_last
-                else batch_size * (num_samples // batch_size),
-                output_size,
-            )
-        )
         metrics = {}
         start = time.time()
         for i, (inputs, y, y_delta_first, y_delta_second) in enumerate(data_loader):
@@ -344,7 +332,7 @@ class Trainer:
             if model.training:
                 loss.backward()
                 # Clip the gradients
-                nn.utils.clip_grad_norm_(model.parameters(), 1.0, norm_type=2.0)  # type: ignore
+                nn.utils.clip_grad_norm_(model.parameters(), norm_value, norm_type=2.0)  # type: ignore
                 # Update the parameters
                 optimizer.step()
                 optimizer.zero_grad()
@@ -360,15 +348,10 @@ class Trainer:
                 y = y.detach().cpu().numpy()
                 y_hat = y_hat.detach().cpu().numpy()
 
-                adj_batch_size = y.shape[0]
-
-                # add to predictions so far
-                # handle the case where the batch size does not divide the dataset size
-                y_pred[i * batch_size : i * batch_size + adj_batch_size] = y_hat
-                y_true[i * batch_size : i * batch_size + adj_batch_size] = y
+                batch_accumulator.update(y_true=y, y_pred=y_hat, index=i)
 
         if self.postprocessor is not None:
-            y_pred, y_true = self.postprocessor(y_pred, y_true, model.training)
+            batch_accumulator.postprocess(self.postprocessor)
 
         # end training epoch
         end = time.time()
@@ -376,7 +359,7 @@ class Trainer:
         results[prefix + "_" + "loss"].append(np.mean(running_loss))
         if score_funcs is not None:
             for name, score_func in score_funcs.items():
-                score = score_func(y_true, y_pred)
+                score = score_func(batch_accumulator.y_true, batch_accumulator.y_pred)
                 if prefix == "train":
                     metrics[name] = score
                 else:

@@ -13,6 +13,8 @@ dataset:
   train_val_split: [0.8, 0.2]
   batch_size: 128
   num_workers: 10
+  num_features: 1096
+  num_targets: 368
 
 early_stopping:
   _target_: src.utils.EarlyStopping
@@ -47,6 +49,7 @@ model:
 trainer:
   epochs: 300
   checkpoint_dir: ${hydra_dir}
+  norm_value: 1.0
 
 hydra:
   run:

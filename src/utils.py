@@ -4,7 +4,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 from sklearn.metrics import r2_score
@@ -13,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
 
 
-TRICK_INDXS = [
+MAGIC_INDEXES = [
     140,
     141,
     142,
@@ -27,13 +26,6 @@ TRICK_INDXS = [
 ]
 
 
-def noise(x: np.ndarray, y: np.ndarray, sigma=0.01):
-    gauss = np.random.normal(0, sigma, x.shape).astype(np.float32)
-    x_ = x.copy()
-    x_ = x + gauss
-    return x_, y
-
-
 def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -43,15 +35,6 @@ def seed_everything(seed: int) -> None:
 
 def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
-
-
-def get_features_targets(
-    data_dir: Path, train_filename: str
-) -> tuple[list[str], list[str]]:
-    columns = pd.read_csv(data_dir.joinpath(train_filename), nrows=1).columns.to_list()
-    features = columns[1:557]
-    targets = columns[557:]
-    return features, targets
 
 
 class XScaler:
@@ -70,17 +53,14 @@ class XScaler:
 
 
 def postprocessor(
-    X_train: np.ndarray,
-    X_val: np.ndarray,
-    indxs: list[int] = TRICK_INDXS,
+    X_magic: np.ndarray,
+    indxs: list[int] = MAGIC_INDEXES,
 ) -> Callable:
     def inner(
-        y_pred: np.ndarray, y_true: np.ndarray, training: bool
+        y_pred: np.ndarray, y_true: np.ndarray, is_traning: bool
     ) -> tuple[np.ndarray, np.ndarray]:
-        if training:
-            y_pred[:, indxs] = -X_train / 1200
-        else:
-            y_pred[:, indxs] = -X_val / 1200
+        if not is_traning:
+            y_pred[:, indxs] = -X_magic / 1200
         scores = r2_score(y_true, y_pred, multioutput="raw_values")
 
         for idx, score in enumerate(scores):  # type: ignore
@@ -196,3 +176,57 @@ class EarlyStopping:
             )
 
         self.val_loss_min = val_loss
+
+
+class BatchAccumulator:
+    """
+    Accumulate the y_true and y_pred values for each batch
+    Note: only used for evaluation
+    """
+
+    def __init__(
+        self, data_loader: torch.utils.data.DataLoader, is_training: bool = False
+    ):
+        drop_last: bool = data_loader.drop_last
+        num_samples: int = len(data_loader.dataset)  # type: ignore
+        output_size: int = 368
+        batch_size: int = (
+            data_loader.batch_size if data_loader.batch_size is not None else 1
+        )
+        self.is_training = is_training
+
+        if not is_training:
+            self.y_true = np.zeros(
+                (
+                    num_samples
+                    if not drop_last
+                    else batch_size * (num_samples // batch_size),
+                    output_size,
+                )
+            )
+            self.y_pred = np.zeros(
+                (
+                    num_samples
+                    if not drop_last
+                    else batch_size * (num_samples // batch_size),
+                    output_size,
+                )
+            )
+        else:
+            self.y_true = np.zeros((batch_size, output_size))
+            self.y_pred = np.zeros((batch_size, output_size))
+
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray, index: int) -> None:
+        if not self.is_training:
+            adj_batch_size = y_true.shape[0]
+            self.y_pred[
+                index * adj_batch_size : index * adj_batch_size + adj_batch_size
+            ] = y_pred
+            self.y_true[
+                index * adj_batch_size : index * adj_batch_size + adj_batch_size
+            ] = y_true
+
+    def postprocess(self, postprocessor: Callable) -> None:
+        self.y_pred, self.y_true = postprocessor(
+            self.y_pred, self.y_true, self.is_training
+        )
