@@ -16,7 +16,11 @@ from tqdm import tqdm
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from src.data import NumpyDataset, read_data  # noqa: E402
+from src.data import (  # noqa: E402
+    NumpyDataset,
+    feature_engineering,
+    read_data,
+)
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
     MAGIC_INDEXES,
@@ -90,6 +94,8 @@ def predict(
         .astype("float32")
         .to_numpy()
     )
+
+    X = feature_engineering(X)
 
     X_magic: np.ndarray = X[:, MAGIC_INDEXES] * weights[:, MAGIC_INDEXES]
 
