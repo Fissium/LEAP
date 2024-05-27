@@ -8,25 +8,6 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 
 
-def feature_engineering(X: np.ndarray) -> np.ndarray:
-    # calculate the difference of each sequence (velocity)
-    X_delta_first = np.diff(
-        np.concatenate(
-            (
-                X[:, :360].reshape(X.shape[0], 6, 60),
-                X[:, -180:].reshape(X.shape[0], 3, 60),
-            ),
-            axis=1,
-        ),
-        axis=-1,
-        prepend=0,
-    ).astype("float32")
-
-    X = np.concatenate((X, X_delta_first.reshape(X.shape[0], -1)), axis=1)
-
-    return X
-
-
 def read_data(
     data_dir: Path,
     train_filename: str,
@@ -55,9 +36,10 @@ def read_data(
 
         df = reader.slice(batch_start, batch_end - batch_start).collect()
 
-        X[batch_start:batch_end, :] = feature_engineering(
+        X[batch_start:batch_end, :] = (
             df.to_pandas().iloc[:, 1:557].astype("float32").to_numpy()
         )
+
         y[batch_start:batch_end, :] = (
             df.to_pandas().iloc[:, 557:].astype("float32").to_numpy()
         ) * weights.to_numpy().reshape(1, -1)
@@ -105,13 +87,18 @@ class NumpyDataset(Dataset):
             axis=0,
         )
         # velocity sequences
-        x_seq_delta_first = x[556 : 556 + 540].reshape(9, 60)
+        x_seq_delta_first = np.diff(x_seq, axis=1, prepend=0).astype(np.float32)
         # acceleration sequences
+        x_seq_delta_second = np.diff(x_seq_delta_first, axis=1, prepend=0).astype(
+            np.float32
+        )
         x_scalar = np.pad(
             x[360:376], (0, 60 - 16), mode="constant", constant_values=0
         ).reshape(1, -1)
 
-        x_seq = np.concatenate((x_seq, x_seq_delta_first, x_scalar), axis=0)
+        x_seq = np.concatenate(
+            (x_seq, x_seq_delta_first, x_seq_delta_second, x_scalar), axis=0
+        )
 
         # y is 6 by 60 sequences, get the difference of each sequence
         y_delta_first = (
