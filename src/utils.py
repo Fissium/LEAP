@@ -61,6 +61,9 @@ def postprocessor(
     ) -> tuple[np.ndarray, np.ndarray]:
         if not is_traning:
             y_pred[:, indxs] = -X_magic / 1200
+        # skip nan values
+        y_pred = np.nan_to_num(y_pred)
+
         scores = r2_score(y_true, y_pred, multioutput="raw_values")
 
         for idx, score in enumerate(scores):  # type: ignore

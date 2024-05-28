@@ -88,17 +88,11 @@ class NumpyDataset(Dataset):
         )
         # velocity sequences
         x_seq_delta_first = np.diff(x_seq, axis=1, prepend=0).astype(np.float32)
-        # acceleration sequences
-        x_seq_delta_second = np.diff(x_seq_delta_first, axis=1, prepend=0).astype(
-            np.float32
-        )
         x_scalar = np.pad(
             x[360:376], (0, 60 - 16), mode="constant", constant_values=0
         ).reshape(1, -1)
 
-        x_seq = np.concatenate(
-            (x_seq, x_seq_delta_first, x_seq_delta_second, x_scalar), axis=0
-        )
+        x_seq = np.concatenate((x_seq, x_seq_delta_first, x_scalar), axis=0)
 
         # y is 6 by 60 sequences, get the difference of each sequence
         y_delta_first = (
