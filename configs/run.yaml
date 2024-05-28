@@ -38,10 +38,10 @@ scheduler:
 
 model:
   _target_: src.models.transformer.Model
-  in_channels: 28
+  in_channels: 19
   d_model: 192
   num_layers: 4
-  nheads: 4
+  nheads: 8
   forward_expansion: 2
   dropout: 0.0
   max_len: 5000
