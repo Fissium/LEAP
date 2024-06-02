@@ -215,7 +215,7 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
-    criterion = nn.HuberLoss()
+    criterion = nn.MSELoss()
     criterion_delta_first = nn.L1Loss()
     criterion_delta_second = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()

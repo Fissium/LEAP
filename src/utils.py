@@ -38,7 +38,7 @@ def get_device() -> str:
 
 
 class XScaler:
-    def __init__(self, min_std=1e-8):
+    def __init__(self, min_std: float = 1e-6):
         self.mean: np.ndarray  # type: ignore
         self.std: np.ndarray  # type: ignore
         self.min_std = min_std

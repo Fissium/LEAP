@@ -78,20 +78,21 @@ class Model(nn.Module):
             dropout=dropout,
             max_len=max_len,
         )
-        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=19)
+        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=1)
+        self.fc = nn.Linear(in_features=d_model, out_features=6 * 3 + 8)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         x = x.permute(0, 2, 1)
         x = self.embedding(x)
         x = self.transformer(x)
-        x = self.global_avg_pool(x)
+        x = self.fc(x)
         x = x.permute(0, 2, 1)
 
         y_seq = x[:, :6, :].reshape(x.size(0), -1)
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
         y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
-        y_scalar = x[:, 18:, :8].reshape(x.size(0), -1)
+        y_scalar = self.global_avg_pool(x[:, 18:, :8]).reshape(x.size(0), -1)
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)
 

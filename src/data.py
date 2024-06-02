@@ -16,7 +16,7 @@ def read_data(
     num_targets: int,
     n_rows: int,
     train_val_split: tuple[float, float],
-    batch_size: int = 500_000,
+    batch_size: int = 2_000_000,
     seed: int = 42,
 ) -> tuple:
     weights = pd.read_csv(
@@ -47,7 +47,11 @@ def read_data(
         del df
 
     X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=train_val_split[1], random_state=seed
+        X,
+        y,
+        test_size=train_val_split[1],
+        random_state=seed,
+        shuffle=False,
     )
 
     return X_train, y_train, X_val, y_val, weights.to_numpy()
