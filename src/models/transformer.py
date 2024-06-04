@@ -70,6 +70,7 @@ class Model(nn.Module):
         super().__init__()
 
         self.embedding = nn.Linear(in_features=in_channels, out_features=d_model)
+        self.layer_norm = nn.LayerNorm(d_model)
         self.transformer = TransformerEncoder(
             d_model=d_model,
             num_layers=num_layers,
@@ -78,21 +79,28 @@ class Model(nn.Module):
             dropout=dropout,
             max_len=max_len,
         )
-        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=1)
-        self.fc = nn.Linear(in_features=d_model, out_features=6 * 3 + 8)
+        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=19)
+        self.relu = nn.ReLU()
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
-        x = x.permute(0, 2, 1)
+    def forward(self, x_inp: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        x = x_inp.permute(0, 2, 1)
         x = self.embedding(x)
         x = self.transformer(x)
-        x = self.fc(x)
+        x = self.global_avg_pool(x)
         x = x.permute(0, 2, 1)
 
         y_seq = x[:, :6, :].reshape(x.size(0), -1)
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
         y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
-        y_scalar = self.global_avg_pool(x[:, 18:, :8]).reshape(x.size(0), -1)
+        # scalar values are non-negative
+        y_scalar = self.relu(x[:, 18:, :8]).reshape(x.size(0), -1)
+
+        # Net surface shortwave flux bounded by surface downwelling shortwave flux
+        shortwave_flux = torch.sum(y_scalar[:, -4:], dim=1, keepdim=True)
+        y_scalar = torch.cat(
+            (torch.min(y_scalar[:, :1], shortwave_flux), y_scalar[:, 1:]), dim=1
+        )
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)
 
