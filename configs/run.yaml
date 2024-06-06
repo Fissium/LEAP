@@ -9,11 +9,11 @@ hydra_dir: ${logs_root}/${now:%Y-%m-%d}_${now:%H-%M-%S}
 seed: 42
 
 dataset:
-  n_rows: 500_000
+  n_rows: 1_000_000
   train_val_split: [0.8, 0.2]
   batch_size: 256
   num_workers: 10
-  num_features: 556
+  num_features: 19
   num_targets: 368
 
 early_stopping:
@@ -39,7 +39,7 @@ scheduler:
 model:
   _target_: src.models.transformer.Model
   in_channels: 19
-  d_model: 128
+  d_model: 192
   num_layers: 4
   nheads: 4
   forward_expansion: 2

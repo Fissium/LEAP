@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.utils.data
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
+from torch.nn.modules.loss import _Loss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -24,6 +25,7 @@ from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
     MAGIC_INDEXES,
     XScaler,
+    add_features,
     get_device,
     postprocessor,
     seed_everything,
@@ -94,7 +96,12 @@ def predict(
         .to_numpy()
     )
 
-    X_magic: np.ndarray = X[:, MAGIC_INDEXES] * weights[:, MAGIC_INDEXES]
+    X = add_features(X)
+
+    X_magic: np.ndarray = (
+        X[:, :3, :].reshape(X.shape[0], -1)[:, MAGIC_INDEXES]
+        * weights[:, MAGIC_INDEXES]
+    )
 
     X = x_scaler.transform(X)
 
@@ -189,7 +196,10 @@ def main(cfg: DictConfig):
     logger.info(f"X_val shape: {X_val.shape}")
     logger.info(f"y_val shape: {y_val.shape}")
 
-    X_val_magic = X_val[:, MAGIC_INDEXES] * weights[:, MAGIC_INDEXES]
+    X_val_magic = (
+        X_val[:, :3, :].reshape(X_val.shape[0], -1)[:, MAGIC_INDEXES]
+        * weights[:, MAGIC_INDEXES]
+    )
 
     x_scaler = XScaler()
     x_scaler.fit(X_train)
@@ -197,8 +207,8 @@ def main(cfg: DictConfig):
     X_train = x_scaler.transform(X_train)
     X_val = x_scaler.transform(X_val)
 
-    train_dataset = NumpyDataset(X=X_train, y=y_train)  # type: ignore
-    val_dataset = NumpyDataset(X=X_val, y=y_val)  # type: ignore
+    train_dataset = NumpyDataset(X=X_train, y=y_train)
+    val_dataset = NumpyDataset(X=X_val, y=y_val)
 
     train_loader = DataLoader(
         train_dataset,
@@ -215,7 +225,30 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
-    criterion = nn.MSELoss()
+
+    class CustomMSELoss(_Loss):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, predictions, targets):
+            mse_loss = nn.MSELoss()(predictions, targets)
+
+            # Extract y_scalar from the prediction
+            y_scalar_pred = predictions[:, -8:]
+
+            # Non-negativity constraint penalty
+            non_negative_penalty = torch.mean(torch.relu(-y_scalar_pred))
+
+            # Net surface shortwave flux constraint penalty
+            shortwave_flux_pred = torch.sum(y_scalar_pred[:, -4:], dim=1, keepdim=True)
+            shortwave_flux_target = y_scalar_pred[:, 0].unsqueeze(1)
+            shortwave_flux_penalty = torch.mean(
+                torch.relu(shortwave_flux_target - shortwave_flux_pred)
+            )
+
+            return mse_loss + non_negative_penalty + shortwave_flux_penalty
+
+    criterion = CustomMSELoss()
     criterion_delta_first = nn.L1Loss()
     criterion_delta_second = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()

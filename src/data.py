@@ -3,17 +3,22 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import polars as pl
+import rootutils
 import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
+
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+
+from src.utils import add_features  # noqa: E402
 
 
 def read_data(
     data_dir: Path,
     train_filename: str,
     ss_filename: str,
-    num_features: int,
     num_targets: int,
+    num_features: int,
     n_rows: int,
     train_val_split: tuple[float, float],
     batch_size: int = 2_000_000,
@@ -28,7 +33,7 @@ def read_data(
         n_rows=n_rows,
     )
 
-    X = np.zeros((n_rows, num_features), dtype=np.float32)
+    X = np.zeros((n_rows, num_features, 60), dtype=np.float32)
     y = np.zeros((n_rows, num_targets), dtype=np.float32)
 
     for batch_start in range(0, n_rows, batch_size):
@@ -36,9 +41,9 @@ def read_data(
 
         df = reader.slice(batch_start, batch_end - batch_start).collect()
 
-        X[batch_start:batch_end, :] = (
-            df.to_pandas().iloc[:, 1:557].astype("float32").to_numpy()
-        )
+        X_batch = df.to_pandas().iloc[:, 1:557].astype("float32").to_numpy()
+
+        X[batch_start:batch_end, :] = add_features(X_batch)
 
         y[batch_start:batch_end, :] = (
             df.to_pandas().iloc[:, 557:].astype("float32").to_numpy()
@@ -82,22 +87,6 @@ class NumpyDataset(Dataset):
         x = self.X[index]
         y = self.y[index]
 
-        # original sequences
-        x_seq = np.concatenate(
-            (
-                x[:360].reshape(6, 60),
-                x[376 : 376 + 180].reshape(3, 60),
-            ),
-            axis=0,
-        )
-        # velocity sequences
-        x_seq_delta_first = np.diff(x_seq, axis=1, prepend=0).astype(np.float32)
-        x_scalar = np.pad(
-            x[360:376], (0, 60 - 16), mode="constant", constant_values=0
-        ).reshape(1, -1)
-
-        x_seq = np.concatenate((x_seq, x_seq_delta_first, x_scalar), axis=0)
-
         # y is 6 by 60 sequences, get the difference of each sequence
         y_delta_first = (
             np.diff(y[:360].reshape(6, 60), axis=-1, prepend=0)
@@ -112,7 +101,7 @@ class NumpyDataset(Dataset):
         )
 
         return (
-            torch.from_numpy(x_seq),
+            torch.from_numpy(x),
             torch.from_numpy(y),
             torch.from_numpy(y_delta_first),
             torch.from_numpy(y_delta_second),

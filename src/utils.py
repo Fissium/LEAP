@@ -37,6 +37,37 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def add_features(X: np.ndarray) -> np.ndarray:
+    X_seq = np.concatenate(
+        (
+            X[:, :360].reshape(X.shape[0], 6, 60),
+            X[:, 376 : 376 + 180].reshape(X.shape[0], 3, 60),
+        ),
+        axis=1,
+    )
+
+    X_seq_delta = np.diff(
+        np.concatenate(
+            (
+                X[:, :360].reshape(X.shape[0], 6, 60),
+                X[:, 376 : 376 + 180].reshape(X.shape[0], 3, 60),
+            ),
+            axis=1,
+        ),
+        axis=-1,
+        prepend=0,
+    ).astype(np.float32)
+
+    X_scalar = np.pad(
+        X[:, 360:376],
+        ((0, 0), (0, 60 - 16)),
+        mode="constant",
+        constant_values=0,
+    ).reshape(X.shape[0], 1, -1)
+
+    return np.concatenate((X_seq, X_seq_delta, X_scalar), axis=1)
+
+
 class XScaler:
     def __init__(self, min_std: float = 1e-8):
         self.mean: np.ndarray  # type: ignore
@@ -48,7 +79,9 @@ class XScaler:
         self.std = np.maximum(X.std(axis=0), self.min_std)
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        X = (X - self.mean.reshape(1, -1)) / self.std.reshape(1, -1)
+        X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
+            1, X.shape[1], X.shape[2]
+        )
         return X
 
 

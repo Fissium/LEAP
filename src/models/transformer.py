@@ -85,6 +85,7 @@ class Model(nn.Module):
     def forward(self, x_inp: torch.Tensor) -> tuple[torch.Tensor, ...]:
         x = x_inp.permute(0, 2, 1)
         x = self.embedding(x)
+        x = self.layer_norm(x)
         x = self.transformer(x)
         x = self.global_avg_pool(x)
         x = x.permute(0, 2, 1)
@@ -93,14 +94,7 @@ class Model(nn.Module):
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
         y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
-        # scalar values are non-negative
-        y_scalar = self.relu(x[:, 18:, :8]).reshape(x.size(0), -1)
-
-        # Net surface shortwave flux bounded by surface downwelling shortwave flux
-        shortwave_flux = torch.sum(y_scalar[:, -4:], dim=1, keepdim=True)
-        y_scalar = torch.cat(
-            (torch.min(y_scalar[:, :1], shortwave_flux), y_scalar[:, 1:]), dim=1
-        )
+        y_scalar = x[:, 18:, :8].reshape(x.size(0), -1)
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)
 
