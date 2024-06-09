@@ -82,6 +82,7 @@ class Model(nn.Module):
             dropout=dropout,
             max_len=max_len,
         )
+        self.head = nn.Conv1d(in_channels=19, out_channels=19, kernel_size=1)
         self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=19)
 
     def forward(self, x_inp: torch.Tensor) -> tuple[torch.Tensor, ...]:
@@ -89,6 +90,7 @@ class Model(nn.Module):
         x = self.transformer(x)
         x = self.global_avg_pool(x)
         x = x.permute(0, 2, 1)
+        x = self.head(x)
 
         y_seq = x[:, :6, :].reshape(x.size(0), -1)
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
