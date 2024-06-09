@@ -17,13 +17,13 @@ from tqdm import tqdm
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
+from src.const import MAGIC_INDEXES  # noqa: E402
 from src.data import (  # noqa: E402
     NumpyDataset,
     read_data,
 )
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
-    MAGIC_INDEXES,
     XScaler,
     add_features,
     get_device,
@@ -230,25 +230,29 @@ def main(cfg: DictConfig):
         def __init__(self):
             super().__init__()
 
-        def forward(self, predictions, targets):
+        def forward(
+            self,
+            predictions: torch.Tensor,
+            targets: torch.Tensor,
+        ):
             mse_loss = nn.MSELoss()(predictions, targets)
 
             # Extract y_scalar from the prediction
             y_scalar_pred = predictions[:, -8:]
 
             # Non-negativity constraint penalty
-            non_negative_penalty = torch.mean(torch.relu(-y_scalar_pred))
+            non_negative_penalty = torch.mean(torch.relu(-y_scalar_pred) ** 2)
 
             # Net surface shortwave flux constraint penalty
             shortwave_flux_pred = torch.sum(y_scalar_pred[:, -4:], dim=1, keepdim=True)
             shortwave_flux_target = y_scalar_pred[:, 0].unsqueeze(1)
             shortwave_flux_penalty = torch.mean(
-                torch.relu(shortwave_flux_target - shortwave_flux_pred)
+                torch.relu(shortwave_flux_target - shortwave_flux_pred) ** 2
             )
 
             return mse_loss + non_negative_penalty + shortwave_flux_penalty
 
-    criterion = CustomMSELoss()
+    criterion = nn.MSELoss()
     criterion_delta_first = nn.L1Loss()
     criterion_delta_second = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()

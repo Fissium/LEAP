@@ -1,12 +1,10 @@
 import math
 
-import rootutils
+import rootutils  # type: ignore
 import torch
 import torch.nn as nn
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
-
-from src.models.wavenet import WaveBlock  # noqa: E402
 
 
 class PositionalEncoding(nn.Module):
@@ -70,44 +68,12 @@ class Model(nn.Module):
         nheads: int = 4,
         forward_expansion: int = 2,
         dropout: float = 0.0,
-        kernel_size: int = 3,
         max_len: int = 5000,
     ):
         super().__init__()
 
-        self.embedding = nn.Linear(in_features=in_channels, out_features=d_model // 2)
-        self.wavenet = nn.Sequential(
-            WaveBlock(
-                in_channels=in_channels,
-                out_channels=16,
-                num_rates=12,
-                kernel_size=kernel_size,
-            ),
-            nn.BatchNorm1d(num_features=16),
-            WaveBlock(
-                in_channels=16,
-                out_channels=32,
-                num_rates=8,
-                kernel_size=kernel_size,
-            ),
-            nn.BatchNorm1d(num_features=32),
-            WaveBlock(
-                in_channels=32,
-                out_channels=64,
-                num_rates=4,
-                kernel_size=kernel_size,
-            ),
-            nn.BatchNorm1d(num_features=64),
-            WaveBlock(
-                in_channels=64,
-                out_channels=d_model // 2,
-                num_rates=1,
-                kernel_size=kernel_size,
-            ),
-            nn.BatchNorm1d(num_features=d_model // 2),
-        )
+        self.embedding = nn.Linear(in_features=in_channels, out_features=d_model)
 
-        self.layer_norm = nn.LayerNorm(d_model // 2)
         self.transformer = TransformerEncoder(
             d_model=d_model,
             num_layers=num_layers,
@@ -119,10 +85,7 @@ class Model(nn.Module):
         self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=19)
 
     def forward(self, x_inp: torch.Tensor) -> tuple[torch.Tensor, ...]:
-        x_wavenet = self.wavenet(x_inp).permute(0, 2, 1)
         x = self.embedding(x_inp.permute(0, 2, 1))
-        x = self.layer_norm(x)
-        x = torch.cat([x, x_wavenet], dim=-1)
         x = self.transformer(x)
         x = self.global_avg_pool(x)
         x = x.permute(0, 2, 1)

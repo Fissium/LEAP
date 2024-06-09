@@ -4,26 +4,16 @@ from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
+import rootutils  # type: ignore
 import torch
 import torch.nn as nn
 from sklearn.metrics import r2_score
 
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+from src.const import MAGIC_INDEXES  # noqa: E402
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
-
-
-MAGIC_INDEXES = [
-    140,
-    141,
-    142,
-    143,
-    144,
-    145,
-    146,
-    147,
-    148,
-    149,
-]
 
 
 def seed_everything(seed: int) -> None:
@@ -35,6 +25,25 @@ def seed_everything(seed: int) -> None:
 
 def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def rolling_mean_3d(input_array: np.ndarray, window_size: int) -> np.ndarray:
+    batch_size, num_channels, num_timesteps = input_array.shape
+
+    # Create the convolution kernel for the rolling mean
+    kernel = np.ones(window_size) / window_size
+
+    # Initialize the output array
+    output_array = np.zeros_like(input_array)
+
+    # Apply the convolution along the num_timesteps dimension
+    for i in range(batch_size):
+        for j in range(num_channels):
+            # Convolve and ensure the output is the same size as input
+            convolved = np.convolve(input_array[i, j, :], kernel, mode="same")
+            output_array[i, j, :] = convolved
+
+    return output_array
 
 
 def add_features(X: np.ndarray) -> np.ndarray:
@@ -87,13 +96,13 @@ class XScaler:
 
 def postprocessor(
     X_magic: np.ndarray,
-    indxs: list[int] = MAGIC_INDEXES,
+    idxs: list[int] = MAGIC_INDEXES,
 ) -> Callable:
     def inner(
         y_pred: np.ndarray, y_true: np.ndarray, is_traning: bool
     ) -> tuple[np.ndarray, np.ndarray]:
         if not is_traning:
-            y_pred[:, indxs] = -X_magic / 1200
+            y_pred[:, idxs] = -X_magic / 1200
         # skip nan values
         y_pred = np.nan_to_num(y_pred)
 
