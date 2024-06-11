@@ -27,25 +27,6 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def rolling_mean_3d(input_array: np.ndarray, window_size: int) -> np.ndarray:
-    batch_size, num_channels, num_timesteps = input_array.shape
-
-    # Create the convolution kernel for the rolling mean
-    kernel = np.ones(window_size) / window_size
-
-    # Initialize the output array
-    output_array = np.zeros_like(input_array)
-
-    # Apply the convolution along the num_timesteps dimension
-    for i in range(batch_size):
-        for j in range(num_channels):
-            # Convolve and ensure the output is the same size as input
-            convolved = np.convolve(input_array[i, j, :], kernel, mode="same")
-            output_array[i, j, :] = convolved
-
-    return output_array
-
-
 def add_features(X: np.ndarray) -> np.ndarray:
     X_seq = np.concatenate(
         (
@@ -56,13 +37,7 @@ def add_features(X: np.ndarray) -> np.ndarray:
     )
 
     X_seq_delta = np.diff(
-        np.concatenate(
-            (
-                X[:, :360].reshape(X.shape[0], 6, 60),
-                X[:, 376 : 376 + 180].reshape(X.shape[0], 3, 60),
-            ),
-            axis=1,
-        ),
+        X_seq,
         axis=-1,
         prepend=0,
     ).astype(np.float32)
@@ -88,9 +63,12 @@ class XScaler:
         self.std = np.maximum(X.std(axis=0), self.min_std)
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
-            1, X.shape[1], X.shape[2]
-        )
+        if X.ndim == 2:
+            X = (X - self.mean.reshape(1, -1)) / self.std.reshape(1, -1)
+        else:
+            X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
+                1, X.shape[1], X.shape[2]
+            )
         return X
 
 
@@ -153,10 +131,6 @@ class EarlyStopping:
             If True, prints a massage for each val loss improvement.
         delta
             Min Change in the monitored quality.
-        path
-            Path for the checkpoint to be saved.
-        trace_func
-            Trace print function.
         """
 
         self.patience = patience
