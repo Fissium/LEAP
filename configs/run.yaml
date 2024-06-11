@@ -40,7 +40,7 @@ model:
   _target_: src.models.transformer.Model
   in_channels: 19
   d_model: 192
-  num_layers: 4
+  num_layers: 8
   nheads: 4
   forward_expansion: 2
   dropout: 0.0

@@ -88,15 +88,12 @@ def predict(
     model.to(device)
     model.load_state_dict(state_dict)
     model.eval()
-    X = (
-        pl.read_csv(data_dir.joinpath(test_filename))
-        .to_pandas()
-        .iloc[:, 1:]
-        .astype("float32")
-        .to_numpy()
-    )
 
-    X = add_features(X)
+    df = pl.read_csv(data_dir.joinpath(test_filename)).to_pandas()
+
+    X = df.iloc[:, 1:].astype("float32").to_numpy()
+
+    X = add_features(X=X)
 
     X_magic: np.ndarray = (
         X[:, :3, :].reshape(X.shape[0], -1)[:, MAGIC_INDEXES]
