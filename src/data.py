@@ -39,17 +39,23 @@ def read_data(
     for batch_start in range(0, n_rows, batch_size):
         batch_end = min(batch_start + batch_size, n_rows)
 
-        df = reader.slice(batch_start, batch_end - batch_start).collect()
+        data = (
+            reader.slice(batch_start, batch_end - batch_start)
+            .collect()
+            .to_pandas()
+            .iloc[:, 1:]
+            .astype("float32")
+            .to_numpy()
+        )
 
-        X_batch = df.to_pandas().iloc[:, 1:557].astype("float32").to_numpy()
+        X_batch = data[:, :556]
+        y_batch = data[:, 556:]
 
         X[batch_start:batch_end, :] = add_features(X_batch)
 
-        y[batch_start:batch_end, :] = (
-            df.to_pandas().iloc[:, 557:].astype("float32").to_numpy()
-        ) * weights.to_numpy().reshape(1, -1)
+        y[batch_start:batch_end, :] = y_batch * weights.to_numpy().reshape(1, -1)
 
-        del df
+        del data
 
     X_train, X_val, y_train, y_val = train_test_split(
         X,
@@ -84,7 +90,7 @@ class NumpyDataset(Dataset):
         Generate one sample of data.
         """
 
-        x = self.X[index]
+        x = self.X[index].transpose(1, 0)
         y = self.y[index]
 
         # y is 6 by 60 sequences, get the difference of each sequence

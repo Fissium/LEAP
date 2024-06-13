@@ -37,14 +37,18 @@ scheduler:
   patience: 10
 
 model:
-  _target_: src.models.transformer.Model
-  in_channels: 19
-  d_model: 192
-  num_layers: 4
-  nheads: 4
-  forward_expansion: 2
-  dropout: 0.0
-  max_len: 5000
+  _target_: src.models.transformerv2.Model
+  in_chans: 19,
+  max_len: 5000,
+  embed_dim: 192,
+  depth: 12,
+  num_heads: 4,
+  mlp_ratio: 2.0,
+  qkv_bias: True,
+  ffn_bias: True,
+  proj_bias: True,
+  drop_path_rate: 0.0,
+  drop_path_uniform: False
 
 trainer:
   epochs: 300

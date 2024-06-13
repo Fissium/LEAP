@@ -27,6 +27,16 @@ class PositionalEncoding(nn.Module):
         return x + self.encoding[:, :length, :].to(x.device)
 
 
+class LearnablePositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, max_len: int = 5000):
+        super().__init__()
+        self.positional_encoding = nn.Parameter(torch.zeros(1, max_len, d_model))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        length = x.size(1)
+        return x + self.positional_encoding[:, :length, :]
+
+
 class TransformerEncoder(nn.Module):
     def __init__(
         self,
@@ -38,7 +48,13 @@ class TransformerEncoder(nn.Module):
         max_len: int = 5000,
     ):
         super().__init__()
-        self.positional_encoding = PositionalEncoding(d_model=d_model, max_len=max_len)
+        # self.positional_encoding = PositionalEncoding(
+        #     d_model=d_model,
+        #     max_len=max_len,
+        # )
+        self.positional_encoding = LearnablePositionalEncoding(
+            d_model=d_model, max_len=max_len
+        )
         self.layers = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=d_model,

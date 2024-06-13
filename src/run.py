@@ -222,6 +222,7 @@ def main(cfg: DictConfig):
     )
 
     model = hydra.utils.instantiate(cfg.model)
+    logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
 
     class CustomMSELoss(_Loss):
         def __init__(self):
