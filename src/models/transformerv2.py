@@ -40,7 +40,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False):
     return output
 
 
-def init_weights_vit_timm(module: nn.Module, name: str = ""):  # noqa: ARG001
+def init_weights_(module: nn.Module, name: str = ""):  # noqa: ARG001
     """ViT weight initialization, original timm impl (for reproducibility)"""
     if isinstance(module, nn.Linear):
         trunc_normal_(module.weight, std=0.02)
@@ -81,7 +81,7 @@ class BlockChunk(nn.ModuleList):
         return x
 
 
-class EmbeddingLayer(nn.Module):
+class EmbeddingLayerFC(nn.Module):
     def __init__(
         self,
         in_chans: int = 19,
@@ -95,6 +95,23 @@ class EmbeddingLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.embeddings(x)
         x = self.norm(x)
+        return x
+
+
+class EmbeddingLayerConv(nn.Module):
+    def __init__(
+        self,
+        in_chans: int = 19,
+        embed_dim: int = 128,
+    ):
+        super().__init__()
+        self.embeddings = nn.Conv1d(
+            in_channels=in_chans, out_channels=embed_dim, kernel_size=3, padding=1
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.embeddings(x.permute(0, 2, 1))
+        x = x.permute(0, 2, 1)
         return x
 
 
@@ -211,7 +228,6 @@ class Block(nn.Module):
         ffn_layer: Callable[..., nn.Module] = Mlp,
     ) -> None:
         super().__init__()
-        # print(f"biases: qkv: {qkv_bias}, proj: {proj_bias}, ffn: {ffn_bias}")
         self.norm1 = norm_layer(dim)
         self.attn = attn_class(
             dim,
@@ -285,7 +301,7 @@ class Model(nn.Module):
         drop_path_rate: float = 0.0,
         drop_path_uniform: bool = False,
         init_values: float | None = None,  # for layerscale: None or 0 => no layerscale
-        embed_layer: Callable[..., nn.Module] = EmbeddingLayer,
+        embed_type: str = "fc",
         act_layer: Callable[..., nn.Module] = nn.GELU,
         block_fn: Callable[..., nn.Module] = Block,
         ffn_layer="mlp",
@@ -294,7 +310,15 @@ class Model(nn.Module):
         super().__init__()
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
-        self.embeddings = embed_layer(in_chans, embed_dim, norm_layer=norm_layer)
+        if embed_type == "fc":
+            self.embeddings = EmbeddingLayerFC(
+                in_chans=in_chans, embed_dim=embed_dim, norm_layer=norm_layer
+            )
+        elif embed_type == "conv":
+            self.embeddings = EmbeddingLayerConv(in_chans=in_chans, embed_dim=embed_dim)
+        else:
+            raise NotImplementedError
+
         self.n_blocks = depth
         self.num_heads = num_heads
 
@@ -342,13 +366,15 @@ class Model(nn.Module):
             self.chunked_blocks = False
             self.blocks = nn.ModuleList(blocks_list)
 
-        self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=19)
+        self.head = nn.Conv1d(
+            in_channels=embed_dim, out_channels=19, kernel_size=3, padding=1
+        )
 
         self.init_weights()
 
     def init_weights(self):
         trunc_normal_(self.pos_embed, std=0.02)
-        named_apply(init_weights_vit_timm, self)
+        named_apply(init_weights_, self)
 
     def forward(self, x):
         x = self.embeddings(x)
@@ -357,8 +383,8 @@ class Model(nn.Module):
         for blk in self.blocks:
             x = blk(x)
 
-        x = self.global_avg_pool(x)
         x = x.permute(0, 2, 1)
+        x = self.head(x)
 
         y_seq = x[:, :6, :].reshape(x.size(0), -1)
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)

@@ -39,10 +39,11 @@ scheduler:
 model:
   _target_: src.models.transformerv2.Model
   in_chans: 19
-  max_len: 5000
+  max_len: 60
   embed_dim: 192
+  embed_type: conv
   depth: 12
-  num_heads: 4
+  num_heads: 6
   mlp_ratio: 2.0
   qkv_bias: True
   ffn_bias: True
