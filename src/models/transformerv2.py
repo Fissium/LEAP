@@ -30,9 +30,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False):
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (
-        x.ndim - 1
-    )  # work with diff dim tensors, not just 2D ConvNets
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)
     random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
     if keep_prob > 0.0:
         random_tensor.div_(keep_prob)
@@ -72,6 +70,17 @@ def drop_add_residual_stochastic_depth(
         x_flat, 0, brange, residual.to(dtype=x.dtype), alpha=residual_scale_factor
     )
     return x_plus_residual.view_as(x)
+
+
+class PermuteLayer(torch.nn.Module):
+    dims: tuple[int, ...]
+
+    def __init__(self, dims: tuple[int, ...]) -> None:
+        super().__init__()
+        self.dims = dims
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return input.permute(*self.dims)
 
 
 class BlockChunk(nn.ModuleList):
@@ -209,6 +218,29 @@ class Mlp(nn.Module):
         return x
 
 
+class SwiGLUFFN(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int | None = None,
+        out_features: int | None = None,
+        act_layer: Callable[..., nn.Module] | None = None,  # noqa: ARG002
+        drop: float = 0.0,  # noqa: ARG002
+        bias: bool = True,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
+        self.w3 = nn.Linear(hidden_features, out_features, bias=bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x12 = self.w12(x)
+        x1, x2 = x12.chunk(2, dim=-1)
+        hidden = F.silu(x1) * x2
+        return self.w3(hidden)
+
+
 class Block(nn.Module):
     def __init__(
         self,
@@ -301,7 +333,7 @@ class Model(nn.Module):
         drop_path_rate: float = 0.0,
         drop_path_uniform: bool = False,
         init_values: float | None = None,  # for layerscale: None or 0 => no layerscale
-        embed_type: str = "fc",
+        embed_layer: str = "fc",
         act_layer: Callable[..., nn.Module] = nn.GELU,
         block_fn: Callable[..., nn.Module] = Block,
         ffn_layer="mlp",
@@ -310,11 +342,11 @@ class Model(nn.Module):
         super().__init__()
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
-        if embed_type == "fc":
+        if embed_layer == "fc":
             self.embeddings = EmbeddingLayerFC(
                 in_chans=in_chans, embed_dim=embed_dim, norm_layer=norm_layer
             )
-        elif embed_type == "conv":
+        elif embed_layer == "conv":
             self.embeddings = EmbeddingLayerConv(in_chans=in_chans, embed_dim=embed_dim)
         else:
             raise NotImplementedError
@@ -333,6 +365,9 @@ class Model(nn.Module):
 
         if ffn_layer == "mlp":
             ffn_layer = Mlp
+
+        elif ffn_layer == "swiglu":
+            ffn_layer = SwiGLUFFN
         else:
             raise NotImplementedError
 
@@ -366,9 +401,15 @@ class Model(nn.Module):
             self.chunked_blocks = False
             self.blocks = nn.ModuleList(blocks_list)
 
-        self.head = nn.Conv1d(
-            in_channels=embed_dim, out_channels=19, kernel_size=3, padding=1
-        )
+        if embed_layer == "fc":
+            self.head = nn.Sequential(nn.AdaptiveAvgPool1d(19), PermuteLayer((0, 2, 1)))
+        elif embed_layer == "conv":
+            self.head = nn.Sequential(
+                PermuteLayer((0, 2, 1)),
+                nn.Conv1d(
+                    in_channels=embed_dim, out_channels=19, kernel_size=3, padding=1
+                ),
+            )
 
         self.init_weights()
 
@@ -383,7 +424,6 @@ class Model(nn.Module):
         for blk in self.blocks:
             x = blk(x)
 
-        x = x.permute(0, 2, 1)
         x = self.head(x)
 
         y_seq = x[:, :6, :].reshape(x.size(0), -1)

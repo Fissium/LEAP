@@ -41,9 +41,10 @@ model:
   in_chans: 19
   max_len: 60
   embed_dim: 192
-  embed_type: conv
+  embed_layer: fc
+  ffn_layer: swiglu
   depth: 12
-  num_heads: 6
+  num_heads: 4
   mlp_ratio: 2.0
   qkv_bias: True
   ffn_bias: True
