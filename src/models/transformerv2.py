@@ -112,14 +112,17 @@ class EmbeddingLayerConv(nn.Module):
         self,
         in_chans: int = 19,
         embed_dim: int = 128,
+        norm_layer: Callable[..., nn.Module] = nn.BatchNorm1d,
     ):
         super().__init__()
         self.embeddings = nn.Conv1d(
             in_channels=in_chans, out_channels=embed_dim, kernel_size=3, padding=1
         )
+        self.norm = norm_layer(embed_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.embeddings(x.permute(0, 2, 1))
+        x = self.norm(x)
         x = x.permute(0, 2, 1)
         return x
 
@@ -340,6 +343,7 @@ class Model(nn.Module):
         block_chunks: int = 1,
     ):
         super().__init__()
+        self.max_len = max_len
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
         if embed_layer == "fc":
@@ -419,7 +423,7 @@ class Model(nn.Module):
 
     def forward(self, x):
         x = self.embeddings(x)
-        x = x + self.pos_embed[:, :60, :]
+        x = x + self.pos_embed[:, : self.max_len, :]
 
         for blk in self.blocks:
             x = blk(x)

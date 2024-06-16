@@ -250,7 +250,7 @@ def main(cfg: DictConfig):
 
             return mse_loss + non_negative_penalty + shortwave_flux_penalty
 
-    criterion = nn.MSELoss()
+    criterion = nn.L1Loss()
     criterion_delta_first = nn.L1Loss()
     criterion_delta_second = nn.L1Loss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
