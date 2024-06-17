@@ -18,7 +18,7 @@ dataset:
 
 early_stopping:
   _target_: src.utils.EarlyStopping
-  patience: 15
+  patience: 10
   delta: 0.0
   verbose: True
   on_each_epoch: False
