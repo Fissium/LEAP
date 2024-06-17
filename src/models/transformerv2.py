@@ -337,6 +337,7 @@ class Model(nn.Module):
         drop_path_uniform: bool = False,
         init_values: float | None = None,  # for layerscale: None or 0 => no layerscale
         embed_layer: str = "fc",
+        head: str = "pool",
         act_layer: Callable[..., nn.Module] = nn.GELU,
         block_fn: Callable[..., nn.Module] = Block,
         ffn_layer="mlp",
@@ -406,7 +407,16 @@ class Model(nn.Module):
             self.blocks = nn.ModuleList(blocks_list)
 
         if embed_layer == "fc":
-            self.head = nn.Sequential(nn.AdaptiveAvgPool1d(19), PermuteLayer((0, 2, 1)))
+            if head == "pool":
+                self.head = nn.Sequential(
+                    nn.AdaptiveAvgPool1d(19), PermuteLayer((0, 2, 1))
+                )
+            elif head == "mlp":
+                self.head = nn.Sequential(
+                    Mlp(in_features=embed_dim, out_features=19), PermuteLayer((0, 2, 1))
+                )
+            else:
+                raise NotImplementedError
         elif embed_layer == "conv":
             self.head = nn.Sequential(
                 PermuteLayer((0, 2, 1)),
@@ -414,6 +424,8 @@ class Model(nn.Module):
                     in_channels=embed_dim, out_channels=19, kernel_size=3, padding=1
                 ),
             )
+        else:
+            raise NotImplementedError
 
         self.init_weights()
 

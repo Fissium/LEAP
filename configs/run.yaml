@@ -42,6 +42,7 @@ model:
   max_len: 60
   embed_dim: 192
   embed_layer: fc
+  head: mlp
   ffn_layer: swiglu
   depth: 12
   num_heads: 4
