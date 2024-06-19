@@ -18,7 +18,7 @@ dataset:
 
 early_stopping:
   _target_: src.utils.EarlyStopping
-  patience: 10
+  patience: 15
   delta: 0.0
   verbose: True
   on_each_epoch: False
@@ -54,7 +54,7 @@ model:
   drop_path_uniform: False
 
 trainer:
-  epochs: 300
+  epochs: 100
   checkpoint_dir: ${hydra_dir}
   norm_value: 1.0
 

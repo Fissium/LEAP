@@ -63,22 +63,42 @@ class XScaler:
         self.std = np.maximum(X.std(axis=0), self.min_std)
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        if X.ndim == 2:
-            X = (X - self.mean.reshape(1, -1)) / self.std.reshape(1, -1)
-        else:
-            X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
-                1, X.shape[1], X.shape[2]
-            )
+        X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
+            1, X.shape[1], X.shape[2]
+        )
         return X
+
+
+class YScaler:
+    def __init__(self, min_std: float = 1e-15, std: np.ndarray | None = None):
+        if std is not None:
+            self.std = std
+        else:
+            self.std = None
+        self.min_std = min_std
+
+    def fit(self, y: np.ndarray) -> None:
+        if self.std is None:
+            self.std = np.maximum(y.std(axis=0), self.min_std)
+
+    def transform(self, y: np.ndarray) -> np.ndarray:
+        return y / self.std
+
+    def inverse_transform(self, y: np.ndarray) -> np.ndarray:
+        return y * self.std
 
 
 def postprocessor(
     X_magic: np.ndarray,
+    y_scaler: YScaler,
+    weights: np.ndarray,
     idxs: list[int] = MAGIC_INDEXES,
 ) -> Callable:
     def inner(
         y_pred: np.ndarray, y_true: np.ndarray, is_traning: bool
     ) -> tuple[np.ndarray, np.ndarray]:
+        y_pred = y_scaler.inverse_transform(y_pred) * weights
+        y_true = y_scaler.inverse_transform(y_true) * weights
         if not is_traning:
             y_pred[:, idxs] = -X_magic / 1200
         # skip nan values

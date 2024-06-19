@@ -53,9 +53,7 @@ def read_data(
 
         X[batch_start:batch_end, :] = add_features(X_batch)
 
-        y[batch_start:batch_end, :] = y_batch * weights.to_numpy().reshape(1, -1)
-
-        del data
+        y[batch_start:batch_end, :] = y_batch
 
     X_train, X_val, y_train, y_val = train_test_split(
         X,
