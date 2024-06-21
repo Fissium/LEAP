@@ -18,7 +18,7 @@ dataset:
 
 early_stopping:
   _target_: src.utils.EarlyStopping
-  patience: 15
+  patience: 60
   delta: 0.0
   verbose: True
   on_each_epoch: False
@@ -30,11 +30,10 @@ optimizer:
   weight_decay: 0.0
 
 scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _target_: src.utils.CosineWarmupScheduler
   _partial_: true
-  mode: max
-  factor: 0.1
-  patience: 10
+  warmup: 10
+  max_iters: 60
 
 model:
   _target_: src.models.transformerv2.Model
@@ -54,7 +53,7 @@ model:
   drop_path_uniform: False
 
 trainer:
-  epochs: 100
+  epochs: 60
   checkpoint_dir: ${hydra_dir}
   norm_value: 1.0
 

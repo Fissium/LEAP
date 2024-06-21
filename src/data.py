@@ -33,6 +33,8 @@ def read_data(
         n_rows=n_rows,
     )
 
+    y_std = np.load(data_dir.joinpath("y_std.npy"))
+
     X = np.zeros((n_rows, num_features, 60), dtype=np.float32)
     y = np.zeros((n_rows, num_targets), dtype=np.float32)
 
@@ -44,16 +46,15 @@ def read_data(
             .collect()
             .to_pandas()
             .iloc[:, 1:]
-            .astype("float32")
             .to_numpy()
         )
 
-        X_batch = data[:, :556]
+        X_batch = data[:, :556].astype(np.float32)
         y_batch = data[:, 556:]
 
         X[batch_start:batch_end, :] = add_features(X_batch)
 
-        y[batch_start:batch_end, :] = y_batch
+        y[batch_start:batch_end, :] = (y_batch / y_std).astype(np.float32)
 
     X_train, X_val, y_train, y_val = train_test_split(
         X,

@@ -103,6 +103,7 @@ def postprocessor(
             y_pred[:, idxs] = -X_magic / 1200
         # skip nan values
         y_pred = np.nan_to_num(y_pred)
+        y_pred[:, -8:] = np.clip(a=y_pred[:, -8:], a_min=0, a_max=None)
 
         scores = r2_score(y_true, y_pred, multioutput="raw_values")
 

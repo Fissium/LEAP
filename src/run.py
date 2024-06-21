@@ -1,4 +1,5 @@
 import logging
+import warnings
 from pathlib import Path
 
 import hydra
@@ -33,6 +34,7 @@ from src.utils import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 def eval(
@@ -95,16 +97,11 @@ def predict(
     model.load_state_dict(state_dict)
     model.eval()
 
-    df = pl.read_csv(data_dir.joinpath(test_filename)).to_pandas()
+    X = pl.read_csv(data_dir.joinpath(test_filename), columns=range(1, 557)).to_numpy()
 
-    X = df.iloc[:, 1:].astype("float32").to_numpy()
+    X_magic = X[:, MAGIC_INDEXES] / 1200
 
-    X = add_features(X=X)
-
-    X_magic: np.ndarray = (
-        X[:, :3, :].reshape(X.shape[0], -1)[:, MAGIC_INDEXES]
-        * weights[:, MAGIC_INDEXES]
-    )
+    X = add_features(X=X.astype(np.float32))
 
     X = x_scaler.transform(X)
 
@@ -152,6 +149,8 @@ def postprocessing(
     for idx, score in enumerate(raw_r2_scores):  # type:ignore
         if score <= 0:
             y[:, idx] = 0
+
+    y[:, -8:] = np.clip(a=y[:, -8:], a_min=0, a_max=None)
 
     return y
 
@@ -224,8 +223,7 @@ def main(cfg: DictConfig):
     y_scaler = YScaler(std=y_std)
     y_scaler.fit(y_train)
 
-    y_train = y_scaler.transform(y_train)
-    y_val = y_scaler.transform(y_val)
+    # do not apply scaling to y because y is already scaled (see data.py)
 
     train_dataset = NumpyDataset(X=X_train, y=y_train)
     val_dataset = NumpyDataset(X=X_val, y=y_val)

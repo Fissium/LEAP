@@ -427,8 +427,6 @@ class Model(nn.Module):
         else:
             raise NotImplementedError
 
-        self.relu = nn.ReLU()
-
         self.init_weights()
 
     def init_weights(self):
@@ -449,7 +447,7 @@ class Model(nn.Module):
         y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
         # scalar outputs must be non-negative
-        y_scalar = self.relu(x[:, 18:, :8].reshape(x.size(0), -1))
+        y_scalar = x[:, 18:, :8].reshape(x.size(0), -1)
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)
 
