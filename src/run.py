@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.utils.data
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
+from torch.nn.modules.loss import _Loss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -41,8 +42,6 @@ def eval(
     model: nn.Module,
     val_loader: DataLoader,
     X_magic: np.ndarray,
-    weights: np.ndarray,
-    y_scaler: YScaler,
     log_dir: Path,
     device: str,
 ) -> np.ndarray:
@@ -60,9 +59,6 @@ def eval(
             targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
-
-    preds = y_scaler.inverse_transform(preds) * weights
-    targets = y_scaler.inverse_transform(targets) * weights
 
     r2_scores = r2_score(targets, preds)
     logger.info(f"R2 Score before postprocessing: {r2_scores}")
@@ -87,8 +83,7 @@ def predict(
     test_filename: str,
     model: nn.Module,
     device: str,
-    x_scaler: XScaler,
-    y_scaler: YScaler,
+    x_scaler,
     batch_size: int,
     weights: np.ndarray,
 ) -> np.ndarray:
@@ -116,8 +111,7 @@ def predict(
         for inputs, *_ in tqdm(test_loader):
             y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
-    preds = np.concatenate(preds)
-    preds = y_scaler.inverse_transform(preds) * weights
+    preds = np.concatenate(preds) * weights
     preds[:, MAGIC_INDEXES] = -X_magic / 1200  # type: ignore
 
     return preds
@@ -163,9 +157,6 @@ def prepare_submission(
     y_pred: np.ndarray,
 ) -> None:
     samples_submission = pd.read_csv(data_dir.joinpath(ss_filename))
-    samples_submission[samples_submission.columns[1:]] = samples_submission[
-        samples_submission.columns[1:]
-    ].astype("float32")
     samples_submission.iloc[:, 1:] = y_pred
     samples_submission.to_parquet(log_dir.joinpath(submissions_filename), index=False)
 
@@ -224,7 +215,6 @@ def main(cfg: DictConfig):
     y_scaler.fit(y_train)
 
     # do not apply scaling to y because y is already scaled (see data.py)
-
     train_dataset = NumpyDataset(X=X_train, y=y_train)
     val_dataset = NumpyDataset(X=X_val, y=y_val)
 
@@ -244,6 +234,32 @@ def main(cfg: DictConfig):
 
     model = hydra.utils.instantiate(cfg.model)
     logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
+
+    class CustomMSELoss(_Loss):
+        def __init__(self):
+            super().__init__()
+
+        def forward(
+            self,
+            predictions: torch.Tensor,
+            targets: torch.Tensor,
+        ):
+            mse_loss = nn.MSELoss()(predictions, targets)
+
+            # Extract y_scalar from the prediction
+            y_scalar_pred = predictions[:, -8:]
+
+            # Non-negativity constraint penalty
+            non_negative_penalty = torch.mean(torch.relu(-y_scalar_pred) ** 2)
+
+            # Net surface shortwave flux constraint penalty
+            shortwave_flux_pred = torch.sum(y_scalar_pred[:, -4:], dim=1, keepdim=True)
+            shortwave_flux_target = y_scalar_pred[:, 0].unsqueeze(1)
+            shortwave_flux_penalty = torch.mean(
+                torch.relu(shortwave_flux_target - shortwave_flux_pred) ** 2
+            )
+
+            return mse_loss + non_negative_penalty + shortwave_flux_penalty
 
     criterion = nn.L1Loss()
     criterion_delta_first = nn.L1Loss()
@@ -267,9 +283,7 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor(
-            X_magic=X_val_magic, y_scaler=y_scaler, weights=weights
-        ),
+        postprocessor=postprocessor(X_magic=X_val_magic),
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
         norm_value=cfg.trainer.norm_value,
@@ -287,8 +301,6 @@ def main(cfg: DictConfig):
         device=device,
         log_dir=Path(cfg.hydra_dir),
         X_magic=X_val_magic,
-        weights=weights,
-        y_scaler=y_scaler,
     )
 
     logger.info("Model evaluated.")
@@ -302,7 +314,6 @@ def main(cfg: DictConfig):
         model=model,
         device=device,
         x_scaler=x_scaler,
-        y_scaler=y_scaler,
         batch_size=cfg.dataset.batch_size,
         weights=weights,
     )

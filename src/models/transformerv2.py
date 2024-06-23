@@ -446,7 +446,6 @@ class Model(nn.Module):
         y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
         y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
 
-        # scalar outputs must be non-negative
         y_scalar = x[:, 18:, :8].reshape(x.size(0), -1)
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)

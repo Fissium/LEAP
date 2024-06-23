@@ -63,9 +63,12 @@ class XScaler:
         self.std = np.maximum(X.std(axis=0), self.min_std)
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
-            1, X.shape[1], X.shape[2]
-        )
+        if X.ndim == 2:
+            X = (X - self.mean.reshape(1, -1)) / self.std.reshape(1, -1)
+        else:
+            X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
+                1, X.shape[1], X.shape[2]
+            )
         return X
 
 
@@ -90,15 +93,11 @@ class YScaler:
 
 def postprocessor(
     X_magic: np.ndarray,
-    y_scaler: YScaler,
-    weights: np.ndarray,
     idxs: list[int] = MAGIC_INDEXES,
 ) -> Callable:
     def inner(
         y_pred: np.ndarray, y_true: np.ndarray, is_traning: bool
     ) -> tuple[np.ndarray, np.ndarray]:
-        y_pred = y_scaler.inverse_transform(y_pred) * weights
-        y_true = y_scaler.inverse_transform(y_true) * weights
         if not is_traning:
             y_pred[:, idxs] = -X_magic / 1200
         # skip nan values

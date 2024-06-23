@@ -56,6 +56,8 @@ def read_data(
 
         y[batch_start:batch_end, :] = (y_batch / y_std).astype(np.float32)
 
+        del data
+
     X_train, X_val, y_train, y_val = train_test_split(
         X,
         y,
