@@ -1,10 +1,8 @@
 import logging
-import warnings
 from pathlib import Path
 
 import hydra
 import numpy as np
-import pandas as pd
 import polars as pl
 import rootutils
 import torch
@@ -12,7 +10,7 @@ import torch.nn as nn
 import torch.utils.data
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
-from torch.nn.modules.loss import _Loss
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -20,13 +18,11 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.const import MAGIC_INDEXES  # noqa: E402
 from src.data import (  # noqa: E402
-    NumpyDataset,
+    LeapDataset,
     read_data,
 )
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
-    XScaler,
-    YScaler,
     add_features,
     get_device,
     postprocessor,
@@ -35,13 +31,15 @@ from src.utils import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 def eval(
     model: nn.Module,
     val_loader: DataLoader,
     X_magic: np.ndarray,
+    y_init: np.ndarray,
+    weights: np.ndarray,
+    y_scaler: StandardScaler,
     log_dir: Path,
     device: str,
 ) -> np.ndarray:
@@ -51,28 +49,25 @@ def eval(
     model.eval()
 
     preds = []
-    targets = []
     with torch.no_grad():
-        for inputs, labels, *_ in tqdm(val_loader):
+        for inputs, *_ in tqdm(val_loader):
             y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
-            targets.append(labels.detach().cpu().numpy())
     preds = np.concatenate(preds)
-    targets = np.concatenate(targets)
 
-    r2_scores = r2_score(targets, preds)
-    logger.info(f"R2 Score before postprocessing: {r2_scores}")
+    preds = y_scaler.inverse_transform(preds.astype(np.float64))  # type: ignore
+
+    raw_r2_scores = r2_score(
+        y_init * weights, preds * weights, multioutput="raw_values"
+    )
+
+    mask = raw_r2_scores <= 0
+    preds[:, mask] = 0  # type: ignore
 
     preds[:, MAGIC_INDEXES] = -X_magic / 1200  # type: ignore
 
-    raw_r2_scores = r2_score(targets, preds, multioutput="raw_values")
-
-    for idx, score in enumerate(raw_r2_scores):  # type: ignore
-        if score <= 0:
-            preds[:, idx] = 0  # type: ignore
-
-    r2_scores = r2_score(targets, preds)
-    logger.info(f"R2 Score after postprocessing: {r2_scores}")
+    score = r2_score(y_init * weights, preds * weights)
+    logger.info(f"R2 Score: {score}")
 
     return raw_r2_scores  # type: ignore
 
@@ -83,10 +78,10 @@ def predict(
     test_filename: str,
     model: nn.Module,
     device: str,
-    x_scaler,
+    x_scaler: StandardScaler,
+    y_scaler: StandardScaler,
     batch_size: int,
-    weights: np.ndarray,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     state_dict = torch.load(log_dir.joinpath("best.ckpt"))["model_state_dict"]
     model.to(device)
     model.load_state_dict(state_dict)
@@ -94,13 +89,13 @@ def predict(
 
     X = pl.read_csv(data_dir.joinpath(test_filename), columns=range(1, 557)).to_numpy()
 
-    X_magic = X[:, MAGIC_INDEXES] / 1200
+    X_magic = X[:, MAGIC_INDEXES]
 
-    X = add_features(X=X.astype(np.float32))
+    X = add_features(X=X).reshape(X.shape[0], -1)
 
-    X = x_scaler.transform(X)
+    X = x_scaler.transform(X).astype(np.float32)  # type: ignore
 
-    test_dataset = NumpyDataset(X=X, y=np.zeros((X.shape[0], 368)))
+    test_dataset = LeapDataset(X=X, y=np.zeros((X.shape[0], 368), dtype=np.float32))
 
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False, drop_last=False
@@ -111,42 +106,24 @@ def predict(
         for inputs, *_ in tqdm(test_loader):
             y_hat, *_ = model(inputs.to(device))
             preds.append(y_hat.detach().cpu().numpy())
-    preds = np.concatenate(preds) * weights
-    preds[:, MAGIC_INDEXES] = -X_magic / 1200  # type: ignore
+    preds = np.concatenate(preds)
+    preds = y_scaler.inverse_transform(preds.astype(np.float64))  # type: ignore
 
-    return preds
+    return preds, X_magic
 
 
 def postprocessing(
-    data_dir: Path,
-    ss_filename: str,
     y: np.ndarray,
     raw_r2_scores: np.ndarray,
+    weights: np.ndarray,
+    X_magic: np.ndarray,
 ) -> np.ndarray:
-    weights = (
-        pd.read_csv(
-            data_dir.joinpath(ss_filename),
-            nrows=1,
-            usecols=range(1, 369),
-        )
-        .astype("float32")
-        .to_numpy()
-        .reshape(1, -1)
-    )
+    mask = raw_r2_scores <= 0
+    y[:, mask] = 0
 
-    for idx, weight in enumerate(weights[0]):
-        if weight > 0:
-            continue
-        else:
-            y[:, idx] = 0
+    y[:, MAGIC_INDEXES] = -X_magic / 1200
 
-    for idx, score in enumerate(raw_r2_scores):  # type:ignore
-        if score <= 0:
-            y[:, idx] = 0
-
-    y[:, -8:] = np.clip(a=y[:, -8:], a_min=0, a_max=None)
-
-    return y
+    return y * weights
 
 
 def prepare_submission(
@@ -156,7 +133,10 @@ def prepare_submission(
     submissions_filename: str,
     y_pred: np.ndarray,
 ) -> None:
-    samples_submission = pd.read_csv(data_dir.joinpath(ss_filename))
+    samples_submission = pl.read_csv(data_dir.joinpath(ss_filename)).to_pandas()
+    samples_submission[samples_submission.columns[1:]] = samples_submission[
+        samples_submission.columns[1:]
+    ].astype("float64")
     samples_submission.iloc[:, 1:] = y_pred
     samples_submission.to_parquet(log_dir.joinpath(submissions_filename), index=False)
 
@@ -174,7 +154,17 @@ def main(cfg: DictConfig):
 
     logger.info("Loading data...")
 
-    X_train, y_train, X_val, y_val, weights = read_data(
+    (
+        X_train,
+        y_train,
+        X_val,
+        y_val,
+        weights,
+        X_val_magic,
+        y_val_init,
+        x_scaler,
+        y_scaler,
+    ) = read_data(
         data_dir=Path(cfg.dataset_root),
         train_filename=cfg.train_filename,
         ss_filename=cfg.ss_filename,
@@ -193,30 +183,8 @@ def main(cfg: DictConfig):
     logger.info(f"X_val shape: {X_val.shape}")
     logger.info(f"y_val shape: {y_val.shape}")
 
-    X_val_magic = (
-        X_val[:, :3, :].reshape(X_val.shape[0], -1)[:, MAGIC_INDEXES]
-        * weights[:, MAGIC_INDEXES]
-    )
-
-    x_scaler = XScaler()
-    x_scaler.fit(X_train)
-
-    X_train = x_scaler.transform(X_train)
-    X_val = x_scaler.transform(X_val)
-
-    logger.info("Loadding std of targets..")
-    if Path(cfg.dataset_root).joinpath("y_std.npy").exists():
-        y_std = np.load(Path(cfg.dataset_root).joinpath("y_std.npy"))
-    else:
-        logger.info("Calculating std of targets..")
-        y_std = None
-
-    y_scaler = YScaler(std=y_std)
-    y_scaler.fit(y_train)
-
-    # do not apply scaling to y because y is already scaled (see data.py)
-    train_dataset = NumpyDataset(X=X_train, y=y_train)
-    val_dataset = NumpyDataset(X=X_val, y=y_val)
+    train_dataset = LeapDataset(X=X_train, y=y_train)
+    val_dataset = LeapDataset(X=X_val, y=y_val)
 
     train_loader = DataLoader(
         train_dataset,
@@ -234,32 +202,6 @@ def main(cfg: DictConfig):
 
     model = hydra.utils.instantiate(cfg.model)
     logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
-
-    class CustomMSELoss(_Loss):
-        def __init__(self):
-            super().__init__()
-
-        def forward(
-            self,
-            predictions: torch.Tensor,
-            targets: torch.Tensor,
-        ):
-            mse_loss = nn.MSELoss()(predictions, targets)
-
-            # Extract y_scalar from the prediction
-            y_scalar_pred = predictions[:, -8:]
-
-            # Non-negativity constraint penalty
-            non_negative_penalty = torch.mean(torch.relu(-y_scalar_pred) ** 2)
-
-            # Net surface shortwave flux constraint penalty
-            shortwave_flux_pred = torch.sum(y_scalar_pred[:, -4:], dim=1, keepdim=True)
-            shortwave_flux_target = y_scalar_pred[:, 0].unsqueeze(1)
-            shortwave_flux_penalty = torch.mean(
-                torch.relu(shortwave_flux_target - shortwave_flux_pred) ** 2
-            )
-
-            return mse_loss + non_negative_penalty + shortwave_flux_penalty
 
     criterion = nn.L1Loss()
     criterion_delta_first = nn.L1Loss()
@@ -283,7 +225,12 @@ def main(cfg: DictConfig):
         },
         device=device,
         checkpoint_dir=Path(cfg.trainer.checkpoint_dir),
-        postprocessor=postprocessor(X_magic=X_val_magic),
+        postprocessor=postprocessor(
+            X_magic=X_val_magic,
+            weights=weights,
+            y_scaler=y_scaler,
+            y_init=y_val_init,
+        ),
         early_stopping=early_stopping,
         lr_scheduler=lr_scheduler,
         norm_value=cfg.trainer.norm_value,
@@ -301,28 +248,31 @@ def main(cfg: DictConfig):
         device=device,
         log_dir=Path(cfg.hydra_dir),
         X_magic=X_val_magic,
+        weights=weights,
+        y_scaler=y_scaler,
+        y_init=y_val_init,
     )
 
     logger.info("Model evaluated.")
 
     logger.info("Predicting test data...")
 
-    preds = predict(
+    preds, X_test_magic = predict(
         data_dir=Path(cfg.dataset_root),
         log_dir=Path(cfg.hydra_dir),
         test_filename=cfg.test_filename,
         model=model,
         device=device,
         x_scaler=x_scaler,
+        y_scaler=y_scaler,
         batch_size=cfg.dataset.batch_size,
-        weights=weights,
     )
 
     preds = postprocessing(
-        data_dir=Path(cfg.dataset_root),
-        ss_filename=cfg.ss_filename,
         y=preds,
         raw_r2_scores=raw_r2_scores,
+        weights=weights,
+        X_magic=X_test_magic,
     )
 
     logger.info("Test data predicted.")

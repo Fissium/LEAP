@@ -8,6 +8,7 @@ import rootutils  # type: ignore
 import torch
 import torch.nn as nn
 from sklearn.metrics import r2_score
+from sklearn.preprocessing import StandardScaler
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.const import MAGIC_INDEXES  # noqa: E402
@@ -40,7 +41,7 @@ def add_features(X: np.ndarray) -> np.ndarray:
         X_seq,
         axis=-1,
         prepend=0,
-    ).astype(np.float32)
+    )
 
     X_scalar = np.pad(
         X[:, 360:376],
@@ -52,84 +53,40 @@ def add_features(X: np.ndarray) -> np.ndarray:
     return np.concatenate((X_seq, X_seq_delta, X_scalar), axis=1)
 
 
-class XScaler:
-    def __init__(self, min_std: float = 1e-8):
-        self.mean: np.ndarray  # type: ignore
-        self.std: np.ndarray  # type: ignore
-        self.min_std = min_std
-
-    def fit(self, X: np.ndarray) -> None:
-        self.mean = X.mean(axis=0)
-        self.std = np.maximum(X.std(axis=0), self.min_std)
-
-    def transform(self, X: np.ndarray) -> np.ndarray:
-        if X.ndim == 2:
-            X = (X - self.mean.reshape(1, -1)) / self.std.reshape(1, -1)
-        else:
-            X = (X - self.mean.reshape(1, X.shape[1], X.shape[2])) / self.std.reshape(
-                1, X.shape[1], X.shape[2]
-            )
-        return X
-
-
-class YScaler:
-    def __init__(self, min_std: float = 1e-15, std: np.ndarray | None = None):
-        if std is not None:
-            self.std = std
-        else:
-            self.std = None
-        self.min_std = min_std
-
-    def fit(self, y: np.ndarray) -> None:
-        if self.std is None:
-            self.std = np.maximum(y.std(axis=0), self.min_std)
-
-    def transform(self, y: np.ndarray) -> np.ndarray:
-        return y / self.std
-
-    def inverse_transform(self, y: np.ndarray) -> np.ndarray:
-        return y * self.std
-
-
 def postprocessor(
     X_magic: np.ndarray,
-    idxs: list[int] = MAGIC_INDEXES,
-) -> Callable:
+    y_scaler: StandardScaler,
+    weights: np.ndarray,
+    y_init: np.ndarray,
+) -> Callable[[np.ndarray, np.ndarray, bool], tuple[np.ndarray, np.ndarray]]:
+    """
+    Postprocessor for the model's predictions (validation only)
+    """
+
     def inner(
-        y_pred: np.ndarray, y_true: np.ndarray, is_traning: bool
+        y_pred: np.ndarray,
+        y_true: np.ndarray,
+        is_traning: bool,
     ) -> tuple[np.ndarray, np.ndarray]:
-        if not is_traning:
-            y_pred[:, idxs] = -X_magic / 1200
         # skip nan values
         y_pred = np.nan_to_num(y_pred)
-        y_pred[:, -8:] = np.clip(a=y_pred[:, -8:], a_min=0, a_max=None)
 
-        scores = r2_score(y_true, y_pred, multioutput="raw_values")
+        if not is_traning:
+            y_pred = y_scaler.inverse_transform(y_pred.astype(np.float64))
 
-        for idx, score in enumerate(scores):  # type: ignore
-            if score <= 0:
-                y_pred[:, idx] = 0
+            scores = r2_score(
+                y_init * weights, y_pred * weights, multioutput="raw_values"
+            )
+            mask = scores <= 0
+
+            y_pred[:, mask] = 0
+            y_pred[:, MAGIC_INDEXES] = -X_magic / 1200
+
+            return y_pred * weights, y_init * weights
 
         return y_pred, y_true
 
     return inner
-
-
-class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
-    def __init__(self, optimizer: torch.optim.Optimizer, warmup: int, max_iters: int):
-        self.warmup = warmup
-        self.max_num_iters = max_iters
-        super().__init__(optimizer)
-
-    def get_lr(self):  # type: ignore
-        lr_factor = self.get_lr_factor(epoch=self.last_epoch)
-        return [base_lr * lr_factor for base_lr in self.base_lrs]
-
-    def get_lr_factor(self, epoch):
-        lr_factor = 0.5 * (1 + np.cos(np.pi * epoch / self.max_num_iters))
-        if epoch <= self.warmup:
-            lr_factor *= epoch * 1.0 / self.warmup
-        return lr_factor
 
 
 class EarlyStopping:
@@ -241,7 +198,8 @@ class BatchAccumulator:
                     if not drop_last
                     else batch_size * (num_samples // batch_size),
                     output_size,
-                )
+                ),
+                dtype=np.float32,
             )
             self.y_pred = np.zeros(
                 (
@@ -249,7 +207,8 @@ class BatchAccumulator:
                     if not drop_last
                     else batch_size * (num_samples // batch_size),
                     output_size,
-                )
+                ),
+                dtype=np.float32,
             )
         else:
             self.y_true = np.zeros((batch_size, output_size))
