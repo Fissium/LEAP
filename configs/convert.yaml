@@ -1,0 +1,10 @@
+dataset_root: /projects/kaggle/LEAP/data/
+train_filename: train.csv
+n_rows: 10_091_520
+batch_size: 200_000
+
+hydra:
+  run:
+    dir: ${hydra_dir}
+  job:
+    chdir: True

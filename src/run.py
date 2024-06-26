@@ -143,8 +143,9 @@ def prepare_submission(
     logger.info(f"Submission file saved to {log_dir.joinpath(submissions_filename)}")
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="run.yaml")
-def main(cfg: DictConfig):
+def train(
+    cfg: DictConfig,
+) -> tuple[nn.Module, np.ndarray, np.ndarray, StandardScaler, StandardScaler]:
     seed_everything(cfg.seed)
 
     device = get_device()
@@ -166,11 +167,9 @@ def main(cfg: DictConfig):
         y_scaler,
     ) = read_data(
         data_dir=Path(cfg.dataset_root),
-        train_filename=cfg.train_filename,
         ss_filename=cfg.ss_filename,
         n_rows=cfg.dataset.n_rows,
         train_val_split=cfg.dataset.train_val_split,
-        seed=cfg.seed,
         num_targets=cfg.dataset.num_targets,
         num_features=cfg.dataset.num_features,
     )
@@ -188,16 +187,16 @@ def main(cfg: DictConfig):
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=cfg.dataset.batch_size,
+        batch_size=cfg.trainer.batch_size,
         shuffle=True,
-        num_workers=cfg.dataset.num_workers,
+        num_workers=cfg.trainer.num_workers,
         generator=torch.Generator().manual_seed(42),
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=cfg.dataset.batch_size,
+        batch_size=cfg.trainer.batch_size,
         shuffle=False,
-        num_workers=cfg.dataset.num_workers,
+        num_workers=cfg.trainer.num_workers,
     )
 
     model = hydra.utils.instantiate(cfg.model)
@@ -255,6 +254,15 @@ def main(cfg: DictConfig):
 
     logger.info("Model evaluated.")
 
+    return model, raw_r2_scores, weights, y_scaler, x_scaler
+
+
+@hydra.main(version_base="1.3", config_path="../configs", config_name="run.yaml")
+def main(cfg: DictConfig):
+    model, raw_r2_scores, weights, y_scaler, x_scaler = train(cfg)
+
+    device = get_device()
+
     logger.info("Predicting test data...")
 
     preds, X_test_magic = predict(
@@ -265,7 +273,7 @@ def main(cfg: DictConfig):
         device=device,
         x_scaler=x_scaler,
         y_scaler=y_scaler,
-        batch_size=cfg.dataset.batch_size,
+        batch_size=cfg.trainer.batch_size,
     )
 
     preds = postprocessing(

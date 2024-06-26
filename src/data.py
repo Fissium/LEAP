@@ -1,11 +1,11 @@
 import gc
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import polars as pl
 import rootutils
 import torch
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
 
@@ -16,21 +16,26 @@ from src.utils import add_features  # noqa: E402
 
 
 def make_scalers(
-    reader: pl.LazyFrame, n_rows: int, batch_size: int
+    n_rows: int | Literal["all"], data_dir: Path, batch_size: int = 200_000
 ) -> tuple[StandardScaler, StandardScaler]:
     x_scaler = StandardScaler()
     y_scaler = StandardScaler()
-    for batch_start in range(0, n_rows, batch_size):
-        batch_end = min(batch_start + batch_size, n_rows)
 
-        data = (
-            reader.slice(batch_start, batch_end - batch_start)
-            .collect()
-            .to_pandas()
-            .iloc[:, 1:]
-            .to_numpy()
+    # load data from npy files
+    if n_rows == "all":
+        files = sorted(
+            data_dir.joinpath("train").glob("batch_*.npy"),
+            key=lambda x: int(x.stem.split("_")[1]),
         )
+    else:
+        assert n_rows % batch_size == 0, "num_rows must be divisible by batch_size"
+        files = sorted(
+            data_dir.joinpath("train").glob("batch_*.npy"),
+            key=lambda x: int(x.stem.split("_")[1]),
+        )[0 : n_rows // batch_size]
 
+    for file in files:
+        data = np.load(file)
         X_batch = add_features(data[:, :556]).reshape(data.shape[0], -1)
         y_batch = data[:, 556:]
 
@@ -45,14 +50,12 @@ def make_scalers(
 
 def read_data(
     data_dir: Path,
-    train_filename: str,
     ss_filename: str,
     num_targets: int,
     num_features: int,
-    n_rows: int,
+    n_rows: int | Literal["all"],
     train_val_split: tuple[float, float],
-    batch_size: int = 2_000_000,
-    seed: int = 42,
+    batch_size: int = 200_000,
 ) -> tuple[
     np.ndarray,
     np.ndarray,
@@ -70,34 +73,40 @@ def read_data(
         .astype(np.float64)
     )
 
-    reader = pl.scan_csv(
-        Path(data_dir).joinpath(train_filename),
-        n_rows=n_rows,
+    x_scaler, y_scaler = make_scalers(
+        n_rows=n_rows, batch_size=batch_size, data_dir=data_dir
     )
 
-    x_scaler, y_scaler = make_scalers(reader, n_rows, batch_size)
+    if n_rows == "all":
+        total_size = 10_091_520
+    else:
+        assert n_rows % batch_size == 0, "num_rows must be divisible by batch_size"
+        total_size = n_rows
 
-    X = np.zeros((n_rows, num_features * 60), dtype=np.float32)
-    X_magic = np.zeros((n_rows, len(MAGIC_INDEXES)), dtype=np.float64)
-    y = np.zeros((n_rows, num_targets), dtype=np.float32)
-    y_init = np.zeros((n_rows, num_targets), dtype=np.float64)
+    val_size = int(total_size * train_val_split[1])
+    train_size = total_size - val_size
 
-    for batch_start in range(0, n_rows, batch_size):
-        batch_end = min(batch_start + batch_size, n_rows)
+    X = np.zeros((total_size, num_features * 60), dtype=np.float32)
+    X_val_magic = np.zeros((val_size, len(MAGIC_INDEXES)), dtype=np.float64)
+    y = np.zeros((total_size, num_targets), dtype=np.float32)
+    y_val_init = np.zeros((val_size, num_targets), dtype=np.float64)
 
-        data = (
-            reader.slice(batch_start, batch_end - batch_start)
-            .collect()
-            .select(pl.col("*").exclude("sample_id"))
-            .to_numpy()
-        )
+    # load data from npy files
+    files = sorted(
+        data_dir.joinpath("train").glob("batch_*.npy"),
+        key=lambda x: int(x.stem.split("_")[1]),
+    )
+    if n_rows != "all":
+        files = files[: n_rows // batch_size]
+
+    for file in files:
+        data = np.load(file)
+
+        batch_start = int(file.stem.split("_")[1])
+        batch_end = int(file.stem.split("_")[-1])
 
         X_batch = data[:, :556]
         y_batch = data[:, 556:]
-
-        X_magic[batch_start:batch_end, :] = data[:, MAGIC_INDEXES]
-
-        y_init[batch_start:batch_end, :] = y_batch
 
         X[batch_start:batch_end, :] = x_scaler.transform(
             add_features(X_batch).reshape(X_batch.shape[0], -1)
@@ -105,39 +114,38 @@ def read_data(
 
         y[batch_start:batch_end, :] = y_scaler.transform(y_batch).astype(np.float32)  # type: ignore
 
+        if batch_end <= train_size:
+            pass
+        elif batch_start < train_size < batch_end:
+            # Batch spans both training and validation sets
+            train_end = train_size
+            val_start = train_size
+            X_val_magic[: batch_end - val_start, :] = X_batch[
+                train_end - batch_start :, MAGIC_INDEXES
+            ]
+            y_val_init[: batch_end - val_start, :] = y_batch[train_end - batch_start :]
+
+        else:
+            # Entire batch belongs to the validation set
+            val_start = batch_start - train_size
+            val_end = batch_end - train_size
+            X_val_magic[val_start:val_end, :] = X_batch[:, MAGIC_INDEXES]
+            y_val_init[val_start:val_end, :] = y_batch
+
         del data, X_batch, y_batch
         gc.collect()
 
-    (
-        X_train,
-        X_val,
-        y_train,
-        y_val,
-        _,
-        X_val_magic,
-        _,
-        y_val_init,
-    ) = train_test_split(
-        X,
-        y,
-        X_magic,
-        y_init,
-        test_size=train_val_split[1],
-        random_state=seed,
-        shuffle=False,
-    )
-
     return (
-        X_train,
-        y_train,
-        X_val,
-        y_val,
+        X[:train_size],
+        y[:train_size],
+        X[train_size:],
+        y[train_size:],
         weights,
         X_val_magic,
         y_val_init,
         x_scaler,
         y_scaler,
-    )  # type: ignore
+    )
 
 
 class LeapDataset(Dataset):
