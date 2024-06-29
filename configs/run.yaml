@@ -10,7 +10,7 @@ seed: 42
 dataset:
   n_rows: 1_000_000 # must be divisible by 200_000 or all
   train_val_split: [0.9, 0.1]
-  num_features: 21
+  num_features: 19
   num_targets: 368
 
 early_stopping:
@@ -35,14 +35,14 @@ scheduler:
 
 model:
   _target_: src.models.transformerv2.Model
-  in_chans: 21
+  in_chans: 19
   max_len: 60
   embed_dim: 192
   embed_layer: fc
   head: mlp
   ffn_layer: swiglu
   depth: 12
-  num_heads: 4
+  num_heads: 6
   mlp_ratio: 2.0
   qkv_bias: True
   ffn_bias: True

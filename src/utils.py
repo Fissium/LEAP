@@ -33,7 +33,6 @@ def add_features(X: np.ndarray) -> np.ndarray:
         (
             X[:, :360].reshape(X.shape[0], 6, 60),
             X[:, 376 : 376 + 180].reshape(X.shape[0], 3, 60),
-            np.sqrt(X[:, 240:300] ** 2 + X[:, 300:360] ** 2).reshape(X.shape[0], 1, 60),
         ),
         axis=1,
     )
