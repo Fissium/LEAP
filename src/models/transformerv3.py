@@ -366,12 +366,11 @@ class SwinTransformerBlock(nn.Module):
         return x
 
 
-class Model(nn.Module):
+class SwinTransformerV2Layer(nn.Module):
     def __init__(
         self,
         embed_dim: int,
         depth: int,
-        in_chans: int,
         num_heads: int,
         window_size: int,
         mlp_ratio=4.0,
@@ -379,30 +378,16 @@ class Model(nn.Module):
         drop=0.0,
         attn_drop=0.0,
         drop_path=0.0,
-        max_len=60,
-        embed_layer="fc",
-        head="mlp",
         norm_layer=nn.LayerNorm,
         pretrained_window_size=0,
     ):
         super().__init__()
-        self.dim = embed_dim
+        self.embed_dim = embed_dim
         self.depth = depth
         self.num_heads = num_heads
         self.window_size = window_size
 
-        self.max_len = max_len
-
-        if embed_layer == "fc":
-            self.embeddings = EmbeddingLayerFC(
-                in_chans=in_chans, embed_dim=embed_dim, norm_layer=norm_layer
-            )
-        elif embed_layer == "conv":
-            self.embeddings = EmbeddingLayerConv(in_chans=in_chans, embed_dim=embed_dim)
-        else:
-            raise NotImplementedError
-
-        self.pos_embed = nn.Parameter(torch.zeros(1, max_len, embed_dim))
+        # build blocks
         self.blocks = nn.ModuleList(
             [
                 SwinTransformerBlock(
@@ -423,6 +408,75 @@ class Model(nn.Module):
                 for i in range(depth)
             ]
         )
+
+    def forward(self, x):
+        for blk in self.blocks:
+            x = blk(x)
+        return x
+
+    def _init_respostnorm(self):
+        for blk in self.blocks:
+            nn.init.constant_(blk.norm1.bias, 0)
+            nn.init.constant_(blk.norm1.weight, 0)
+            nn.init.constant_(blk.norm2.bias, 0)
+            nn.init.constant_(blk.norm2.weight, 0)
+
+
+class Model(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int,
+        depths: list[int],
+        in_chans: int,
+        num_heads: list[int],
+        window_size: int,
+        mlp_ratio=4.0,
+        qkv_bias=True,
+        drop=0.0,
+        attn_drop=0.0,
+        drop_path=0.0,
+        max_len=60,
+        embed_layer="fc",
+        head="mlp",
+        norm_layer=nn.LayerNorm,
+        pretrained_window_size=0,
+    ):
+        super().__init__()
+        self.dim = embed_dim
+        self.depths = depths
+        self.num_heads = num_heads
+        self.window_size = window_size
+        self.num_layers = len(depths)
+
+        self.max_len = max_len
+
+        if embed_layer == "fc":
+            self.embeddings = EmbeddingLayerFC(
+                in_chans=in_chans, embed_dim=embed_dim, norm_layer=norm_layer
+            )
+        elif embed_layer == "conv":
+            self.embeddings = EmbeddingLayerConv(in_chans=in_chans, embed_dim=embed_dim)
+        else:
+            raise NotImplementedError
+
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_len, embed_dim))
+        # build layers
+        self.layers = nn.ModuleList()
+        for i_layer in range(self.num_layers):
+            layer = SwinTransformerV2Layer(
+                embed_dim=embed_dim,
+                depth=depths[i_layer],
+                num_heads=num_heads[i_layer],
+                window_size=window_size,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                drop=drop,
+                attn_drop=attn_drop,
+                norm_layer=norm_layer,
+                drop_path=drop_path,
+                pretrained_window_size=pretrained_window_size,
+            )
+            self.layers.append(layer)
 
         if embed_layer == "fc":
             if head == "pool":
@@ -447,11 +501,8 @@ class Model(nn.Module):
         self.relu = nn.ReLU()
 
         self.apply(self._init_weights)
-        for block in self.blocks:
-            nn.init.constant_(block.norm1.bias, 0)
-            nn.init.constant_(block.norm1.weight, 0)
-            nn.init.constant_(block.norm2.bias, 0)
-            nn.init.constant_(block.norm2.weight, 0)
+        for bly in self.layers:
+            bly._init_respostnorm()
 
     def _init_weights(self, m):
         trunc_normal_(self.pos_embed, std=0.02)
@@ -468,8 +519,8 @@ class Model(nn.Module):
         x = self.embeddings(x)
         x = x + self.pos_embed[:, : self.max_len, :]
 
-        for block in self.blocks:
-            x = block(x)
+        for layer in self.layers:
+            x = layer(x)
 
         x = self.head(x)
 

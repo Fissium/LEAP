@@ -41,8 +41,8 @@ model:
   embed_layer: fc
   head: mlp
   window_size: 5
-  depth: 12
-  num_heads: 6
+  depths: [2, 2, 2, 2]
+  num_heads: [4, 8, 16, 32]
   mlp_ratio: 2.0
   qkv_bias: True
 
