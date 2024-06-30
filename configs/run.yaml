@@ -34,21 +34,17 @@ scheduler:
   patience: 10
 
 model:
-  _target_: src.models.transformerv2.Model
+  _target_: src.models.transformerv3.Model
   in_chans: 19
   max_len: 60
   embed_dim: 192
   embed_layer: fc
   head: mlp
-  ffn_layer: swiglu
+  window_size: 5
   depth: 12
   num_heads: 6
   mlp_ratio: 2.0
   qkv_bias: True
-  ffn_bias: True
-  proj_bias: True
-  drop_path_rate: 0.0
-  drop_path_uniform: False
 
 trainer:
   epochs: 60
