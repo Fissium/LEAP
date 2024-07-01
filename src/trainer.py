@@ -331,7 +331,7 @@ class Trainer:
             loss_w = loss_w.view(-1)
             loss = torch.sum(
                 torch.stack((loss_, loss_delta_first, loss_delta_second))
-                / (loss_w + 1e-8)
+                / (loss_w**2 + 1e-8)
             ) + torch.sum(torch.log(loss_w + 1e-8))
 
             if model.training:
