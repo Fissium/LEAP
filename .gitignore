@@ -3,7 +3,7 @@ data/*
 !data/.gitkeep
 logs/*
 !logs/.gitkeep
-runs/
+runs/*
 !runs/*.sh
 !runs/.gitkeep
 notebooks/*
