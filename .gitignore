@@ -4,6 +4,8 @@ data/*
 logs/*
 !logs/.gitkeep
 runs/
+!runs/*.sh
+!runs/.gitkeep
 notebooks/*
 !notebooks/.gitkeep
 
