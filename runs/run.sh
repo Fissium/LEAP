@@ -17,8 +17,6 @@ VENV_NAME="$WORK_DIR/.venv"
 LOGS_DIR="/mnt/pool/5/ovkomleva/LEAP/logs"
 EXCLUDE_DIRS=("data" "logs" "notebooks" "runs" ".venv" ".git")
 
-mkdir -p "$WORK_DIR/logs"
-
 rsync -av --exclude="${EXCLUDE_DIRS[*]}" "$SOURCE_DIR" "$WORK_DIR"
 
 cd $WORK_DIR || exit 1
