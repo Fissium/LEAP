@@ -14,7 +14,6 @@ SOURCE_DIR="/mnt/pool/5/ovkomleva/LEAP/"
 CONDA_DIR="$WORK_DIR/miniforge3/bin/activate"
 RUN_SCRIPT="$WORK_DIR/src/run.py"
 VENV_NAME="$WORK_DIR/.venv"
-LOGS_DIR="/mnt/pool/5/ovkomleva/LEAP/logs"
 EXCLUDE_DIRS=("data" "logs" "notebooks" "runs" ".venv" ".git")
 
 rsync -av --exclude="${EXCLUDE_DIRS[*]}" "$SOURCE_DIR" "$WORK_DIR"
@@ -26,7 +25,7 @@ if python $RUN_SCRIPT; then
 
   LATEST_LOG_DIR=$(ls -td "$WORK_DIR/logs"/*/ | head -1)
   if [ -d "$LATEST_LOG_DIR" ]; then
-    cp -r "$LATEST_LOG_DIR" "$LOGS_DIR"
+    cp -r "$LATEST_LOG_DIR" "$SOURCE_DIR/logs"
   else
     echo "No directories found in logs."
   fi
