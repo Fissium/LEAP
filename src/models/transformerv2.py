@@ -428,9 +428,6 @@ class Model(nn.Module):
             raise NotImplementedError
 
         self.relu = nn.ReLU()
-        self.loss_w = nn.Parameter(
-            torch.ones(3, dtype=torch.float32, requires_grad=True)
-        )
         self.init_weights()
 
     def init_weights(self):
@@ -455,6 +452,4 @@ class Model(nn.Module):
 
         y_seq = torch.cat([y_seq, y_scalar], dim=-1)
 
-        self.loss_w = self.loss_w
-
-        return y_seq, y_delta_first, y_delta_second, self.loss_w
+        return y_seq, y_delta_first, y_delta_second

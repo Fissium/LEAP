@@ -317,7 +317,7 @@ class Trainer:
             y_delta_first = y_delta_first.to(device)
             y_delta_second = y_delta_second.to(device)
 
-            y_hat, y_hat_delta_first, y_hat_delta_second, loss_w = model(
+            y_hat, y_hat_delta_first, y_hat_delta_second = model(
                 inputs
             )  # this just computed f_Θ(x(i))
             # Compute loss.
@@ -327,12 +327,7 @@ class Trainer:
                 y_hat_delta_second, y_delta_second
             )
 
-            # loss = loss_ + loss_delta_first + loss_delta_second
-            loss_w = loss_w.view(-1)
-            loss = torch.sum(
-                torch.stack((loss_, loss_delta_first, loss_delta_second))
-                / (loss_w**2 + 1e-8)
-            ) + torch.log(torch.prod(loss_w) + 1e-8)
+            loss = loss_ + loss_delta_first + loss_delta_second
 
             if model.training:
                 loss.backward()
