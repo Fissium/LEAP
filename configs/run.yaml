@@ -1,5 +1,5 @@
-dataset_root: /Users/fissium/Projects/kaggle/LEAP/data/
-logs_root: /Users/fissium/Projects/kaggle/LEAP/logs/
+dataset_root: /projects/kaggle/LEAP/data/
+logs_root: /projects/kaggle/LEAP/logs/
 test_filename: test.csv
 ss_filename: sample_submission.csv
 
