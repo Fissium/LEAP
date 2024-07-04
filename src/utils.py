@@ -89,6 +89,15 @@ def postprocessor(
     return inner
 
 
+class LogCoshLoss(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, y_true, y_pred):
+        error = y_true - y_pred
+        return torch.mean(torch.log(torch.cosh(error + 1e-12)))
+
+
 class EarlyStopping:
     """Early stops the training if val loss doesn't improve after a given patience."""
 

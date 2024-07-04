@@ -10,7 +10,6 @@ import pkbar
 import rootutils
 import torch.nn as nn
 import torch.utils.data
-from torch.nn.modules.loss import _Loss
 from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
@@ -30,9 +29,9 @@ class Trainer:
     def __init__(
         self,
         model: nn.Module,
-        loss_func: _Loss,
-        loss_func_delta_first: _Loss,
-        loss_func_delta_second: _Loss,
+        loss_func: nn.Module,
+        loss_func_delta_first: nn.Module,
+        loss_func_delta_second: nn.Module,
         checkpoint_dir: Path,
         optimizer: torch.optim.Optimizer,
         train_loader: torch.utils.data.DataLoader,
@@ -260,9 +259,9 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         norm_value: float,
         data_loader: torch.utils.data.DataLoader,
-        loss_func: _Loss,
-        loss_func_delta_first: _Loss,
-        loss_func_delta_second: _Loss,
+        loss_func: nn.Module,
+        loss_func_delta_first: nn.Module,
+        loss_func_delta_second: nn.Module,
         device: str,
         results: dict[str, list],
         score_funcs: dict[str, Callable] | None,

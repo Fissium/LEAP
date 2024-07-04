@@ -202,9 +202,9 @@ def train(
     model = hydra.utils.instantiate(cfg.model)
     logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
 
-    criterion = nn.L1Loss()
-    criterion_delta_first = nn.L1Loss()
-    criterion_delta_second = nn.L1Loss()
+    criterion = hydra.utils.instantiate(cfg.criterion)
+    criterion_delta_first = hydra.utils.instantiate(cfg.criterion_delta_first)
+    criterion_delta_second = hydra.utils.instantiate(cfg.criterion_delta_second)
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
