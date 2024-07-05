@@ -10,7 +10,7 @@
 #SBATCH --time=48:00:00
 
 WORK_DIR="/tmp/2024-05-10_LEAP"
-SOURCE_DIR="/mnt/pool/5/ovkomleva/LEAP/"
+SOURCE_DIR="/mnt/pool/6/ovkomleva/LEAP/"
 CONDA_DIR="$WORK_DIR/miniforge3/bin/activate"
 RUN_SCRIPT="$WORK_DIR/src/run.py"
 VENV_NAME="$WORK_DIR/.venv"

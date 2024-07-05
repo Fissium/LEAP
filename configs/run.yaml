@@ -42,7 +42,7 @@ model:
   head: mlp
   ffn_layer: swiglu
   depth: 12
-  num_heads: 8
+  num_heads: 6
   mlp_ratio: 2.0
   qkv_bias: True
   ffn_bias: True
