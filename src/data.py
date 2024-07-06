@@ -176,14 +176,8 @@ class LeapDataset(Dataset):
         y = self.y[index]
 
         # y is 6 by 60 sequences, get the difference of each sequence
-        y_delta_first = (
+        y_delta = (
             np.diff(y[:360].reshape(6, 60), axis=-1, prepend=0)
-            .reshape(-1)
-            .astype(np.float32)
-        )
-
-        y_delta_second = (
-            np.diff(y_delta_first.reshape(6, 60), axis=-1, prepend=0)
             .reshape(-1)
             .astype(np.float32)
         )
@@ -191,6 +185,5 @@ class LeapDataset(Dataset):
         return (
             torch.from_numpy(x),
             torch.from_numpy(y),
-            torch.from_numpy(y_delta_first),
-            torch.from_numpy(y_delta_second),
+            torch.from_numpy(y_delta),
         )

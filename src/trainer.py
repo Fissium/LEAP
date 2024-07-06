@@ -28,8 +28,7 @@ class Trainer:
         self,
         model: nn.Module,
         loss_func: nn.Module,
-        loss_func_delta_first: nn.Module,
-        loss_func_delta_second: nn.Module,
+        loss_func_delta: nn.Module,
         checkpoint_dir: Path,
         optimizer: torch.optim.Optimizer,
         train_loader: torch.utils.data.DataLoader,
@@ -51,10 +50,8 @@ class Trainer:
             The Pytorch model / "Moduel" to train.
         loss_func
             The loss function.
-        loss_func_delta_first
+        loss_func_delta
             The loss function for the first derivative.
-        loss_func_delta_second
-            The loss function for the second derivative.
         optimizer
             The optimizer.
         train_loader
@@ -85,8 +82,7 @@ class Trainer:
         """
         self.model = model
         self.loss_func = loss_func
-        self.loss_func_delta_first = loss_func_delta_first
-        self.loss_func_delta_second = loss_func_delta_second
+        self.loss_func_delta = loss_func_delta
         self.optimizer = optimizer
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -184,8 +180,7 @@ class Trainer:
                 self.norm_value,
                 self.train_loader,
                 self.loss_func,
-                self.loss_func_delta_first,
-                self.loss_func_delta_second,
+                self.loss_func_delta,
                 self.device,
                 results,
                 self.score_funcs,
@@ -208,8 +203,7 @@ class Trainer:
                         self.norm_value,
                         self.val_loader,
                         self.loss_func,
-                        self.loss_func_delta_first,
-                        self.loss_func_delta_second,
+                        self.loss_func_delta,
                         self.device,
                         results,
                         self.score_funcs,
@@ -258,8 +252,7 @@ class Trainer:
         norm_value: float,
         data_loader: torch.utils.data.DataLoader,
         loss_func: nn.Module,
-        loss_func_delta_first: nn.Module,
-        loss_func_delta_second: nn.Module,
+        loss_func_delta: nn.Module,
         device: str,
         results: dict[str, list],
         score_funcs: dict[str, Callable] | None,
@@ -307,24 +300,18 @@ class Trainer:
         running_loss = []
         metrics = {}
         start = time.time()
-        for i, (inputs, y, y_delta_first, y_delta_second) in enumerate(data_loader):
+        for i, (inputs, y, y_delta) in enumerate(data_loader):
             # Move the batch to the device we are using.
             inputs = inputs.to(device)
             y = y.to(device)
-            y_delta_first = y_delta_first.to(device)
-            y_delta_second = y_delta_second.to(device)
+            y_delta = y_delta.to(device)
 
-            y_hat, y_hat_delta_first, y_hat_delta_second = model(
-                inputs
-            )  # this just computed f_Θ(x(i))
+            y_hat, y_hat_delta = model(inputs)  # this just computed f_Θ(x(i))
             # Compute loss.
             loss_ = loss_func(y_hat, y)
-            loss_delta_first = loss_func_delta_first(y_hat_delta_first, y_delta_first)
-            loss_delta_second = loss_func_delta_second(
-                y_hat_delta_second, y_delta_second
-            )
+            loss_delta_first = loss_func_delta(y_hat_delta, y_delta)
 
-            loss = loss_ + loss_delta_first + loss_delta_second
+            loss = loss_ + loss_delta_first
 
             if model.training:
                 loss.backward()

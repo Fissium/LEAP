@@ -8,7 +8,7 @@ hydra_dir: ${logs_root}/${now:%Y-%m-%d}_${now:%H-%M-%S}
 seed: 42
 
 dataset:
-  n_rows: 1_000_000 # must be divisible by 200_000 or all
+  n_rows: 200_000 # must be divisible by 200_000 or all
   train_val_split: [0.9, 0.1]
   num_features: 19
   num_targets: 368
@@ -36,6 +36,7 @@ scheduler:
 model:
   _target_: src.models.transformerv2.Model
   in_chans: 19
+  out_chans: 13
   max_len: 60
   embed_dim: 192
   embed_layer: fc
@@ -51,16 +52,13 @@ model:
   drop_path_uniform: False
 
 criterion:
-  _target_: src.utils.LogCoshLoss
+  _target_: torch.nn.L1Loss
 
-criterion_delta_first:
-  _target_: src.utils.LogCoshLoss
-
-criterion_delta_second:
-  _target_: src.utils.LogCoshLoss
+criterion_delta:
+  _target_: torch.nn.L1Loss
 
 trainer:
-  epochs: 60
+  epochs: 1
   checkpoint_dir: ${hydra_dir}
   norm_value: 1.0
   batch_size: 256

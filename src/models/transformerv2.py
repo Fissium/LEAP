@@ -325,6 +325,7 @@ class Model(nn.Module):
     def __init__(
         self,
         in_chans: int = 19,
+        out_chans: int = 13,
         max_len: int = 5000,
         embed_dim: int = 192,
         depth: int = 12,
@@ -409,11 +410,12 @@ class Model(nn.Module):
         if embed_layer == "fc":
             if head == "pool":
                 self.head = nn.Sequential(
-                    nn.AdaptiveAvgPool1d(19), PermuteLayer((0, 2, 1))
+                    nn.AdaptiveAvgPool1d(out_chans), PermuteLayer((0, 2, 1))
                 )
             elif head == "mlp":
                 self.head = nn.Sequential(
-                    Mlp(in_features=embed_dim, out_features=19), PermuteLayer((0, 2, 1))
+                    Mlp(in_features=embed_dim, out_features=out_chans),
+                    PermuteLayer((0, 2, 1)),
                 )
             else:
                 raise NotImplementedError
@@ -421,7 +423,10 @@ class Model(nn.Module):
             self.head = nn.Sequential(
                 PermuteLayer((0, 2, 1)),
                 nn.Conv1d(
-                    in_channels=embed_dim, out_channels=19, kernel_size=3, padding=1
+                    in_channels=embed_dim,
+                    out_channels=out_chans,
+                    kernel_size=3,
+                    padding=1,
                 ),
             )
         else:
@@ -443,13 +448,12 @@ class Model(nn.Module):
 
         x = self.head(x)
 
-        y_seq = x[:, :6, :].reshape(x.size(0), -1)
-        y_delta_first = x[:, 6:12, :].reshape(x.size(0), -1)
-        y_delta_second = x[:, 12:18, :].reshape(x.size(0), -1)
+        y = x[:, :6, :].reshape(x.size(0), -1)
+        y_delta = x[:, 6:12, :].reshape(x.size(0), -1)
 
         # scalar outputs must be non-negative
-        y_scalar = self.relu(x[:, 18:, :8].reshape(x.size(0), -1))
+        y_scalar = self.relu(x[:, 12:, :8].reshape(x.size(0), -1))
 
-        y_seq = torch.cat([y_seq, y_scalar], dim=-1)
+        y = torch.cat([y, y_scalar], dim=-1)
 
-        return y_seq, y_delta_first, y_delta_second
+        return y, y_delta
