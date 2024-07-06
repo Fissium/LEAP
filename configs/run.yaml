@@ -58,7 +58,7 @@ criterion_delta:
   _target_: torch.nn.L1Loss
 
 trainer:
-  epochs: 1
+  epochs: 60
   checkpoint_dir: ${hydra_dir}
   norm_value: 1.0
   batch_size: 256
