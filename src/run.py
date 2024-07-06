@@ -1,4 +1,5 @@
 import logging
+import pprint
 from pathlib import Path
 
 import hydra
@@ -24,6 +25,7 @@ from src.data import (  # noqa: E402
 from src.trainer import Trainer  # noqa: E402
 from src.utils import (  # noqa: E402
     add_features,
+    dictconfig_to_dict,
     get_device,
     postprocessor,
     seed_everything,
@@ -147,7 +149,8 @@ def train(
     cfg: DictConfig,
 ) -> tuple[nn.Module, np.ndarray, np.ndarray, StandardScaler, StandardScaler]:
     logger.info("Starting training...")
-    logger.info(f"Config: {cfg}")
+    logger.info("Config:")
+    pprint.pprint(dictconfig_to_dict(cfg))
 
     seed_everything(cfg.seed)
 

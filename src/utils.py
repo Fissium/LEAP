@@ -3,11 +3,13 @@ import math
 import random
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import rootutils  # type: ignore
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
@@ -16,6 +18,18 @@ from src.const import MAGIC_INDEXES  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
+
+
+def dictconfig_to_dict(cfg: DictConfig) -> dict[str, Any]:
+    ret = {}
+
+    for k in cfg.keys():
+        if isinstance(cfg[k], DictConfig) or isinstance(cfg[k], dict):
+            ret[k] = dictconfig_to_dict(cfg[k])
+        else:
+            ret[k] = cfg[k]
+
+    return ret
 
 
 def seed_everything(seed: int) -> None:
