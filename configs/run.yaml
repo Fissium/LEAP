@@ -8,7 +8,7 @@ hydra_dir: ${logs_root}/${now:%Y-%m-%d}_${now:%H-%M-%S}
 seed: 42
 
 dataset:
-  n_rows: 200_000 # must be divisible by 200_000 or all
+  n_rows: all # must be divisible by 200_000 or all
   train_val_split: [0.9, 0.1]
   num_features: 19
   num_targets: 368
@@ -62,7 +62,7 @@ trainer:
   checkpoint_dir: ${hydra_dir}
   norm_value: 1.0
   batch_size: 256
-  num_workers: 10
+  num_workers: 8
 
 hydra:
   run:

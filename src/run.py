@@ -146,6 +146,9 @@ def prepare_submission(
 def train(
     cfg: DictConfig,
 ) -> tuple[nn.Module, np.ndarray, np.ndarray, StandardScaler, StandardScaler]:
+    logger.info("Starting training...")
+    logger.info(f"Config: {cfg}")
+
     seed_everything(cfg.seed)
 
     device = get_device()

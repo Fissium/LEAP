@@ -2,7 +2,7 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=10:00:00
+#SBATCH --time=2:00:00
 
 WORK_DIR="/tmp/2024-05-10_LEAP"
 SOURCE_DIR="/mnt/pool/6/ovkomleva/LEAP"
