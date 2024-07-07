@@ -15,7 +15,7 @@ dataset:
 
 early_stopping:
   _target_: src.utils.EarlyStopping
-  patience: 15
+  patience: ${trainer.epochs}
   delta: 0.0
   verbose: True
   on_each_epoch: False
@@ -27,15 +27,15 @@ optimizer:
   weight_decay: 0.0
 
 scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _target_: src.utils.CosineLRScheduler
   _partial_: true
-  mode: max
-  factor: 0.1
-  patience: 10
+  num_warmup_steps: 10
+  lr_max: ${optimizer.lr}
+  num_training_steps: ${trainer.epochs}
 
 model:
   _target_: src.models.transformerv2.Model
-  in_chans: 19
+  in_chans: ${dataset.num_features}
   out_chans: 13
   max_len: 60
   embed_dim: 192
@@ -58,7 +58,7 @@ criterion_delta:
   _target_: torch.nn.L1Loss
 
 trainer:
-  epochs: 60
+  epochs: 50
   checkpoint_dir: ${hydra_dir}
   norm_value: 1.0
   batch_size: 256

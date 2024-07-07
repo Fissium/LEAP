@@ -104,6 +104,53 @@ def postprocessor(
     return inner
 
 
+class CosineLRScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        num_warmup_steps: int,
+        lr_max: float,
+        num_cycles: float = 0.50,
+        num_training_steps: int = 50,
+        warmup_method: str = "exp",
+        last_epoch: int = -1,
+    ):
+        self.num_warmup_steps = num_warmup_steps
+        self.lr_max = lr_max
+        self.num_cycles = num_cycles
+        self.num_training_steps = num_training_steps
+        self.warmup_method = warmup_method
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):  # type: ignore
+        current_step = self.last_epoch + 1
+
+        if current_step < self.num_warmup_steps:
+            if self.warmup_method == "log":
+                lr = self.lr_max * 0.10 ** (self.num_warmup_steps - current_step)
+            elif self.warmup_method == "exp":
+                lr = self.lr_max * 2 ** -(self.num_warmup_steps - current_step)
+            else:
+                raise NotImplementedError
+        else:
+            progress = float(current_step - self.num_warmup_steps) / float(
+                max(1, self.num_training_steps - self.num_warmup_steps)
+            )
+            lr = (
+                max(
+                    0.0,
+                    0.5
+                    * (
+                        1.0
+                        + math.cos(math.pi * float(self.num_cycles) * 2.0 * progress)
+                    ),
+                )
+                * self.lr_max
+            )
+
+        return [lr for _ in self.optimizer.param_groups]
+
+
 def log_cosh_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
     def _log_cosh(x: torch.Tensor) -> torch.Tensor:
         return x + torch.nn.functional.softplus(-2.0 * x) - math.log(2.0)

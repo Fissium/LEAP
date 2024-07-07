@@ -39,7 +39,6 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False):
 
 
 def init_weights_(module: nn.Module, name: str = ""):  # noqa: ARG001
-    """ViT weight initialization, original timm impl (for reproducibility)"""
     if isinstance(module, nn.Linear):
         trunc_normal_(module.weight, std=0.02)
         if module.bias is not None:
