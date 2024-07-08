@@ -71,6 +71,67 @@ def drop_add_residual_stochastic_depth(
     return x_plus_residual.view_as(x)
 
 
+class Swish(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return inputs * inputs.sigmoid()
+
+
+class DoubleLevelWiseConv(nn.Module):
+    def __init__(self, in_chans: int, out_chans: int, level_size: int = 3):
+        super().__init__()
+
+        self.bn_00 = nn.BatchNorm2d(in_chans)
+        self.depthwise_01 = nn.Conv2d(
+            in_channels=in_chans,
+            out_channels=out_chans,
+            kernel_size=(level_size, 1),
+            stride=1,
+            padding=((level_size - 1) // 2, 0),
+        )
+        self.silu = Swish()
+        self.bn_01 = nn.BatchNorm2d(out_chans)
+        self.depthwise_02 = nn.Conv2d(
+            in_channels=out_chans,
+            out_channels=out_chans,
+            kernel_size=(level_size, 1),
+            stride=1,
+            padding=((level_size - 1) // 2, 0),
+        )
+        self.silu = Swish()
+        self.bn_02 = nn.BatchNorm2d(out_chans)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.bn_00(x)
+        x = self.depthwise_01(x)
+        x = self.silu(x)
+        x = self.bn_01(x)
+        x = self.depthwise_02(x)
+        x = self.silu(x)
+        x = self.bn_02(x)
+        return x
+
+
+class ChannelMixing(nn.Module):
+    def __init__(self, in_chans, out_chans):
+        super().__init__()
+
+        self.first_linear = nn.Linear(in_chans, out_chans)
+        self.gelu = Swish()
+        self.layer_norm = nn.LayerNorm(out_chans)
+        self.second_linear = nn.Linear(out_chans, in_chans)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.first_linear(x)
+        x = self.gelu(x)
+        x = self.layer_norm(x)
+        x = self.second_linear(x)
+        return x + residual
+
+
 class PermuteLayer(torch.nn.Module):
     dims: tuple[int, ...]
 
@@ -110,19 +171,47 @@ class EmbeddingLayerConv(nn.Module):
     def __init__(
         self,
         in_chans: int = 19,
-        embed_dim: int = 128,
-        norm_layer: Callable[..., nn.Module] = nn.BatchNorm1d,
+        out_chans: int = 64,
     ):
         super().__init__()
-        self.embeddings = nn.Conv1d(
-            in_channels=in_chans, out_channels=embed_dim, kernel_size=3, padding=1
+        self.level_wise_conv_01 = DoubleLevelWiseConv(
+            in_chans=in_chans, out_chans=out_chans, level_size=3
         )
-        self.norm = norm_layer(embed_dim)
+        self.level_wise_conv_02 = DoubleLevelWiseConv(
+            in_chans=in_chans, out_chans=out_chans, level_size=7
+        )
+        self.level_wise_conv_03 = DoubleLevelWiseConv(
+            in_chans=in_chans, out_chans=out_chans, level_size=15
+        )
+        self.channel_mixer_01 = ChannelMixing(
+            in_chans=out_chans, out_chans=out_chans * 2
+        )
+        self.channel_mixer_02 = ChannelMixing(
+            in_chans=out_chans, out_chans=out_chans * 2
+        )
+        self.channel_mixer_03 = ChannelMixing(
+            in_chans=out_chans, out_chans=out_chans * 2
+        )
+        self.level_wise_conv_04 = DoubleLevelWiseConv(
+            in_chans=out_chans * 3, out_chans=out_chans * 3, level_size=3
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.embeddings(x.permute(0, 2, 1))
-        x = self.norm(x)
         x = x.permute(0, 2, 1)
+        x = x.unsqueeze(1)
+        x = x.permute(0, 2, 3, 1)
+        level_conved_01 = self.level_wise_conv_01(x).squeeze(3)
+        level_conved_02 = self.level_wise_conv_02(x).squeeze(3)
+        level_conved_03 = self.level_wise_conv_03(x).squeeze(3)
+
+        level_conved_01 = level_conved_01.permute(0, 2, 1)
+        level_conved_02 = level_conved_02.permute(0, 2, 1)
+        level_conved_03 = level_conved_03.permute(0, 2, 1)
+        mixed_01 = self.channel_mixer_01(level_conved_01)
+        mixed_02 = self.channel_mixer_02(level_conved_02)
+        mixed_03 = self.channel_mixer_03(level_conved_03)
+
+        x = torch.cat([mixed_01, mixed_02, mixed_03], dim=2)
         return x
 
 
@@ -352,7 +441,9 @@ class Model(nn.Module):
                 in_chans=in_chans, embed_dim=embed_dim, norm_layer=norm_layer
             )
         elif embed_layer == "conv":
-            self.embeddings = EmbeddingLayerConv(in_chans=in_chans, embed_dim=embed_dim)
+            self.embeddings = EmbeddingLayerConv(
+                in_chans=in_chans, out_chans=embed_dim // 3
+            )
         else:
             raise NotImplementedError
 
@@ -406,32 +497,20 @@ class Model(nn.Module):
             self.chunked_blocks = False
             self.blocks = nn.ModuleList(blocks_list)
 
-        if embed_layer == "fc":
-            if head == "pool":
-                self.head = nn.Sequential(
-                    nn.AdaptiveAvgPool1d(out_chans), PermuteLayer((0, 2, 1))
-                )
-            elif head == "mlp":
-                self.head = nn.Sequential(
-                    Mlp(in_features=embed_dim, out_features=out_chans),
-                    PermuteLayer((0, 2, 1)),
-                )
-            else:
-                raise NotImplementedError
-        elif embed_layer == "conv":
+        if head == "pool":
             self.head = nn.Sequential(
+                nn.AdaptiveAvgPool1d(out_chans), PermuteLayer((0, 2, 1))
+            )
+        elif head == "mlp":
+            self.head = nn.Sequential(
+                Mlp(in_features=embed_dim, out_features=out_chans),
                 PermuteLayer((0, 2, 1)),
-                nn.Conv1d(
-                    in_channels=embed_dim,
-                    out_channels=out_chans,
-                    kernel_size=3,
-                    padding=1,
-                ),
             )
         else:
             raise NotImplementedError
 
         self.relu = nn.ReLU()
+        self.alphas = nn.Parameter(torch.zeros(self.n_blocks))
         self.init_weights()
 
     def init_weights(self):
@@ -442,8 +521,10 @@ class Model(nn.Module):
         x = self.embeddings(x)
         x = x + self.pos_embed[:, : self.max_len, :]
 
-        for blk in self.blocks:
+        for idx, blk in enumerate(self.blocks):
+            x_old = x
             x = blk(x)
+            x = x + self.alphas[idx] * x_old
 
         x = self.head(x)
 

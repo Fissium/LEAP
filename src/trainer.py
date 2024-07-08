@@ -14,7 +14,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from src.utils import BatchAccumulator, EarlyStopping  # noqa: E402
+from src.callbacks import ModelCheckpoint  # noqa: E402
+from src.utils import BatchAccumulator  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__file__)
@@ -38,7 +39,7 @@ class Trainer:
         norm_value: float = 1.0,
         resume_training: bool = False,
         resume_training_ckpt: Path | None = None,
-        early_stopping: EarlyStopping | None = None,
+        checkpoint_callback: ModelCheckpoint | None = None,
         lr_scheduler: ReduceLROnPlateau | _LRScheduler | None = None,
         postprocessor: Callable | None = None,
         device: str | None = None,
@@ -72,8 +73,8 @@ class Trainer:
             Using the chechpoint_file's last state to resume trating.
         resume_training_ckpt
             The checkpoint file to resume training from.
-        early_stopping
-            Save the best model and stop traing if there is no improvement in val_loss
+        checkpoint_callback
+            A callback to save the model during training.
         lr_scheduler
             Learning rate scheduler.
         postprocessor
@@ -96,7 +97,7 @@ class Trainer:
         self.checkpoint_dir = checkpoint_dir
         self.resume_training = resume_training
         self.resume_training_ckpt = resume_training_ckpt
-        self.early_stopping = early_stopping
+        self.checkpoint_callback = checkpoint_callback
         self.lr_scheduler = lr_scheduler
         self.postprocessor = postprocessor
 
@@ -213,20 +214,10 @@ class Trainer:
                     metrics["val_loss"] = results["val_loss"][-1]
                     metrics.update(val_metrics)
 
-                    if self.early_stopping is not None:
-                        self.early_stopping(
-                            metrics["val_r2"],
-                            self.model,
-                            epoch,
-                            self.checkpoint_dir,
+                    if self.checkpoint_callback is not None:
+                        self.checkpoint_callback(
+                            model=model, val_score=metrics["val_r2"]
                         )
-
-                        if self.early_stopping.early_stop:
-                            metrics.update({"lr": self.optimizer.param_groups[0]["lr"]})
-                            pbar.add(1, values=list(metrics.items()))
-
-                            logger.info("Early stopping")
-                            break
 
                     if self.lr_scheduler is not None:
                         if isinstance(self.lr_scheduler, ReduceLROnPlateau):
@@ -239,9 +230,6 @@ class Trainer:
                 1,
                 values=list(metrics.items()),
             )
-
-        if self.early_stopping is None:
-            self.save_model()
 
         return pd.DataFrame.from_dict(results)
 

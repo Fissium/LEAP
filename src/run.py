@@ -213,7 +213,7 @@ def train(
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
-    early_stopping = hydra.utils.instantiate(cfg.early_stopping)
+    checkpoint_callback = hydra.utils.instantiate(cfg.checkpoint_callback)
 
     trainer = Trainer(
         model=model,
@@ -234,7 +234,7 @@ def train(
             y_scaler=y_scaler,
             y_init=y_val_init,
         ),
-        early_stopping=early_stopping,
+        checkpoint_callback=checkpoint_callback,
         lr_scheduler=lr_scheduler,
         norm_value=cfg.trainer.norm_value,
     )

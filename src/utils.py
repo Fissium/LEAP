@@ -1,23 +1,17 @@
-import logging
 import math
 import random
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import rootutils  # type: ignore
 import torch
-import torch.nn as nn
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.const import MAGIC_INDEXES  # noqa: E402
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__file__)
 
 
 def dictconfig_to_dict(cfg: DictConfig) -> dict[str, Any]:
@@ -164,91 +158,6 @@ class LogCoshLoss(torch.nn.Module):
 
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         return log_cosh_loss(y_pred, y_true)
-
-
-class EarlyStopping:
-    """Early stops the training if val loss doesn't improve after a given patience."""
-
-    def __init__(
-        self,
-        patience: int = 7,
-        verbose: bool = False,
-        delta: float = 0,
-        on_each_epoch: bool = False,
-    ) -> None:
-        """
-        Parameters
-        ----------
-        patience
-            How long to wait after last time validation loss improved.
-        verbose
-            If True, prints a massage for each val loss improvement.
-        delta
-            Min Change in the monitored quality.
-        """
-
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_score: float | None = None
-        self.early_stop: bool = False
-        self.val_loss_min = np.Inf
-        self.delta = delta
-        self.on_each_epoch = on_each_epoch
-
-    def __call__(
-        self,
-        val_loss: float,
-        model: nn.Module,
-        epoch: int,
-        path: Path,
-    ) -> None:
-        score = val_loss
-
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model, epoch, path)
-        elif score < self.best_score + self.delta:
-            self.counter += 1
-            logger.info(
-                f"\nEarlyStopping counter: {self.counter} out of {self.patience}",
-            )
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model, epoch, path)
-            self.counter = 0
-
-    def save_checkpoint(
-        self,
-        val_loss: float,
-        model: nn.Module,
-        epoch: int,
-        path: Path,
-    ) -> None:
-        """Saves model when validation loss decrease."""
-        if self.verbose:
-            logger.info(
-                f"\nValidation metric increased ({self.val_loss_min:.6f} -->"
-                f" {val_loss:.6f}).  Saving model ...",
-            )
-        if self.on_each_epoch:
-            torch.save(
-                {
-                    "model_state_dict": model.state_dict(),
-                },
-                path.joinpath(f"epoch_{epoch}.ckpt"),
-            )
-        else:
-            torch.save(
-                {
-                    "model_state_dict": model.state_dict(),
-                },
-                path.joinpath("best.ckpt"),
-            )
-
-        self.val_loss_min = val_loss
 
 
 class BatchAccumulator:
