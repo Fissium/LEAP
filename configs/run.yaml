@@ -26,11 +26,11 @@ optimizer:
   weight_decay: 0.0
 
 scheduler:
-  _target_: src.utils.CosineLRScheduler
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
   _partial_: true
-  num_warmup_steps: 10
-  lr_max: ${optimizer.lr}
-  num_training_steps: ${trainer.epochs}
+  mode: max
+  factor: 0.1
+  patience: 10
 
 model:
   _target_: src.models.transformerv2.Model
