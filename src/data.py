@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.const import MAGIC_INDEXES  # noqa: E402
-from src.utils import add_features  # noqa: E402
+from src.utils import add_features, load_initial_params  # noqa: E402
 
 
 def make_scalers(
@@ -20,6 +20,8 @@ def make_scalers(
 ) -> tuple[StandardScaler, StandardScaler]:
     x_scaler = StandardScaler()
     y_scaler = StandardScaler()
+
+    a, b, p0 = load_initial_params(dataset_root=data_dir)
 
     # load data from npy files
     if n_rows == "all":
@@ -36,7 +38,9 @@ def make_scalers(
 
     for file in files:
         data = np.load(file)
-        X_batch = add_features(data[:, :556]).reshape(data.shape[0], -1)
+        X_batch = add_features(X=data[:, :556], a=a, b=b, p0=p0).reshape(
+            data.shape[0], -1
+        )
         y_batch = data[:, 556:]
 
         x_scaler.partial_fit(X_batch)
@@ -72,6 +76,8 @@ def read_data(
         .to_numpy()
         .astype(np.float64)
     )
+
+    a, b, p0 = load_initial_params(dataset_root=data_dir)
 
     x_scaler, y_scaler = make_scalers(
         n_rows=n_rows, batch_size=batch_size, data_dir=data_dir
@@ -109,7 +115,7 @@ def read_data(
         y_batch = data[:, 556:]
 
         X[batch_start:batch_end, :] = x_scaler.transform(
-            add_features(X_batch).reshape(X_batch.shape[0], -1)
+            add_features(X=X_batch, a=a, b=b, p0=p0).reshape(X_batch.shape[0], -1)
         ).astype(np.float32)  # type: ignore
 
         y[batch_start:batch_end, :] = y_scaler.transform(y_batch).astype(np.float32)  # type: ignore
@@ -176,11 +182,11 @@ class LeapDataset(Dataset):
         y = self.y[index]
 
         # y is 6 by 60 sequences, get the difference of each sequence
-        y_delta = (
-            np.diff(y[:360].reshape(6, 60), axis=-1, prepend=0)
-            .reshape(-1)
-            .astype(np.float32)
-        )
+        y_delta = np.diff(y[:360].reshape(6, 60), axis=-1, prepend=0)
+
+        y_delta[:, 0] = 0  # first element is always 0
+
+        y_delta = y_delta.flatten().astype(np.float32)
 
         return (
             torch.from_numpy(x),

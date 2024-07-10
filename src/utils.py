@@ -1,17 +1,36 @@
 import math
 import random
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import rootutils  # type: ignore
 import torch
+import torch.nn as nn
+from numpy.core.multiarray import ndarray
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.const import MAGIC_INDEXES  # noqa: E402
+
+
+def load_initial_params(
+    dataset_root: Path,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    a = np.load(dataset_root.joinpath("a.npy"))
+    b = np.load(dataset_root.joinpath("b.npy"))
+    p0 = np.load(dataset_root.joinpath("p0.npy"))
+    return a, b, p0
+
+
+def get_pressure_thickness(
+    a: np.ndarray, b: np.ndarray, p0: np.ndarray, ps: np.ndarray
+) -> np.ndarray:
+    p = (a * p0).reshape(-1, 1) + b.reshape(-1, 1) * ps.reshape(1, -1)
+    return np.diff(p, axis=0).T
 
 
 def dictconfig_to_dict(cfg: DictConfig) -> dict[str, Any]:
@@ -37,7 +56,7 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def add_features(X: np.ndarray) -> np.ndarray:
+def add_features(X: np.ndarray, a: ndarray, b: ndarray, p0: ndarray) -> np.ndarray:
     X_seq = np.concatenate(
         (
             X[:, :360].reshape(X.shape[0], 6, 60),
@@ -46,11 +65,17 @@ def add_features(X: np.ndarray) -> np.ndarray:
         axis=1,
     )
 
+    X_pressure_thickness = get_pressure_thickness(
+        a=a, b=b, p0=p0, ps=X[:, 360]
+    ).reshape(X.shape[0], 1, -1)
+
     X_seq_delta = np.diff(
         X_seq,
         axis=-1,
         prepend=0,
     )
+
+    X_seq_delta[:, :, 0] = 0
 
     X_scalar = np.pad(
         X[:, 360:376],
@@ -59,7 +84,7 @@ def add_features(X: np.ndarray) -> np.ndarray:
         constant_values=0,
     ).reshape(X.shape[0], 1, -1)
 
-    return np.concatenate((X_seq, X_seq_delta, X_scalar), axis=1)
+    return np.concatenate((X_seq, X_seq_delta, X_pressure_thickness, X_scalar), axis=1)
 
 
 def postprocessor(
@@ -96,6 +121,22 @@ def postprocessor(
         return y_pred, y_true
 
     return inner
+
+
+class MaskedL1Loss(nn.Module):
+    def __init__(self, mask: torch.BoolTensor):
+        super().__init__()
+        self.mask = mask
+
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        masked_predictions = predictions.clone()
+        masked_predictions[:, self.mask] = 0
+
+        # Compute the L1 loss
+        l1_loss = nn.L1Loss(reduction="mean")
+        loss = l1_loss(masked_predictions, targets)
+
+        return loss
 
 
 class CosineLRScheduler(torch.optim.lr_scheduler._LRScheduler):

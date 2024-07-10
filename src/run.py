@@ -27,6 +27,7 @@ from src.utils import (  # noqa: E402
     add_features,
     dictconfig_to_dict,
     get_device,
+    load_initial_params,
     postprocessor,
     seed_everything,
 )
@@ -93,7 +94,9 @@ def predict(
 
     X_magic = X[:, MAGIC_INDEXES]
 
-    X = add_features(X=X).reshape(X.shape[0], -1)
+    a, b, p0 = load_initial_params(dataset_root=data_dir)
+
+    X = add_features(X=X, a=a, b=b, p0=p0).reshape(X.shape[0], -1)
 
     X = x_scaler.transform(X).astype(np.float32)  # type: ignore
 
@@ -208,8 +211,11 @@ def train(
     model = hydra.utils.instantiate(cfg.model)
     logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
 
-    criterion = hydra.utils.instantiate(cfg.criterion)
-    criterion_delta = hydra.utils.instantiate(cfg.criterion_delta)
+    mask = torch.from_numpy(weights.flatten() == 0)
+    mask_delta = torch.from_numpy(weights[:, :360].flatten() == 0)
+
+    criterion = hydra.utils.instantiate(cfg.criterion, mask=mask)()
+    criterion_delta = hydra.utils.instantiate(cfg.criterion_delta, mask=mask_delta)()
     optimizer = hydra.utils.instantiate(cfg.optimizer, params=model.parameters())()
     lr_scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer=optimizer)()
 
