@@ -35,11 +35,8 @@ scheduler:
 model:
   _target_: src.models.transformerv2.Model
   in_chans: ${dataset.num_features}
-  out_chans: 13
   max_len: 60
   embed_dim: 192
-  embed_layer: fc
-  head: mlp
   ffn_layer: swiglu
   depth: 12
   num_heads: 6
