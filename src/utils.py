@@ -8,7 +8,6 @@ import numpy as np
 import rootutils  # type: ignore
 import torch
 import torch.nn as nn
-from numpy.core.multiarray import ndarray
 from omegaconf import DictConfig
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
@@ -56,7 +55,7 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def add_features(X: np.ndarray, a: ndarray, b: ndarray, p0: ndarray) -> np.ndarray:
+def add_features(X: np.ndarray) -> np.ndarray:
     X_seq = np.concatenate(
         (
             X[:, :360].reshape(X.shape[0], 6, 60),
@@ -64,10 +63,6 @@ def add_features(X: np.ndarray, a: ndarray, b: ndarray, p0: ndarray) -> np.ndarr
         ),
         axis=1,
     )
-
-    X_pressure_thickness = get_pressure_thickness(
-        a=a, b=b, p0=p0, ps=X[:, 360]
-    ).reshape(X.shape[0], 1, -1)
 
     X_seq_delta = np.diff(
         X_seq,
@@ -84,7 +79,7 @@ def add_features(X: np.ndarray, a: ndarray, b: ndarray, p0: ndarray) -> np.ndarr
         constant_values=0,
     ).reshape(X.shape[0], 1, -1)
 
-    return np.concatenate((X_seq, X_seq_delta, X_pressure_thickness, X_scalar), axis=1)
+    return np.concatenate((X_seq, X_seq_delta, X_scalar), axis=1)
 
 
 def postprocessor(
@@ -193,12 +188,15 @@ def log_cosh_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
     return torch.mean(_log_cosh(y_pred - y_true))
 
 
-class LogCoshLoss(torch.nn.Module):
-    def __init__(self):
+class MaskedLogCoshLoss(torch.nn.Module):
+    def __init__(self, mask: torch.BoolTensor):
         super().__init__()
+        self.mask = mask
 
-    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-        return log_cosh_loss(y_pred, y_true)
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        masked_predictions = predictions.clone()
+        masked_predictions[:, self.mask] = 0
+        return log_cosh_loss(masked_predictions, targets)
 
 
 class BatchAccumulator:

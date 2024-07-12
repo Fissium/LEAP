@@ -325,7 +325,7 @@ class Model(nn.Module):
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
         self.embeddings = EmbeddingLayer(
-            in_chans=in_chans, embed_dim=embed_dim - in_chans, norm_layer=norm_layer
+            in_chans=in_chans, embed_dim=embed_dim, norm_layer=norm_layer
         )
 
         self.n_blocks = depth
@@ -397,7 +397,6 @@ class Model(nn.Module):
 
     def forward(self, x_inp):
         x = self.embeddings(x_inp)
-        x = torch.cat([x, x_inp], dim=-1)
         x = x + self.pos_embed[:, : self.max_len, :]
 
         for idx, blk in enumerate(self.blocks):

@@ -1,10 +1,7 @@
 import math
 
-import rootutils  # type: ignore
 import torch
 import torch.nn as nn
-
-rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 
 class PositionalEncoding(nn.Module):
