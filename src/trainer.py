@@ -260,10 +260,8 @@ class Trainer:
             DataLoader object that returns tuples of (input, label) pairs.
         loss_func
             The loss function.
-        loss_func_delta_first
+        loss_func_delta
             The loss function for the first derivative.
-        loss_func_delta_second
-            The loss function for the second derivative.
         device
             The compute lodation to perform training.
         results

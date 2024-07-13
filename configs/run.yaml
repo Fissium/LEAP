@@ -36,10 +36,10 @@ model:
   _target_: src.models.transformerv2.Model
   in_chans: ${dataset.num_features}
   max_len: 60
-  embed_dim: 192
+  embed_dim: 256
   ffn_layer: swiglu
-  depth: 20
-  num_heads: 6
+  depth: 12
+  num_heads: 8
   mlp_ratio: 2.0
   qkv_bias: True
   ffn_bias: True
